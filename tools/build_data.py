@@ -97,6 +97,11 @@ for fn in ('TransportOrderCreated-logs.json', 'TransportOrderUpdated-logs.json')
             })
             st = STATUS.get(tk['status'].replace('TRANSPORT_ORDER_STATUS_', ''), 'ready')
             task['events'].append([t, st, to.get('assignedUserId')])
+            # first moment the task is logged as urgent (escalation or urgent from the start)
+            if tk.get('priority') == 'PRIORITY_TYPE_URGENT' and not task.get('urgentAt'):
+                task['urgentAt'] = t
+            if tk.get('latestFinishTime'):
+                task['due'] = ts_iso(tk['latestFinishTime'])
             order_of_task[tk['id']] = to['id']
 
 # ---- fallback / enrichment from DB snapshot ----------------------------
@@ -132,6 +137,16 @@ for ct in rows('CargoTasks.csv'):
         task['events'].append([ts_csv(o.get('UpdatedAt')) or task['events'][-1][0], 'cancelled', None])
     task['flight'] = task.get('flight') or nul(ct['FlightId'])
     task['company'] = task.get('company') or companies.get(o.get('CompanyId'))
+    # DB values win for deadlines; urgency time falls back to task creation
+    task['due'] = ts_csv(ct['LatestFinishTime']) or task.get('due')
+    task['elevateAt'] = ts_csv(ct['ElevateUrgencyTime'])
+    task['urgent'] = ct['Priority'] == 'Urgent'
+    if task['urgent'] and not task.get('urgentAt'):
+        task['urgentAt'] = task['events'][0][0]
+    # The logs only show an escalation at the task's next update; the DB's ElevateUrgencyTime is when it happened.
+    first = min(e[0] for e in task['events'])
+    if task['urgent'] and task['elevateAt'] and first < task['elevateAt'] <= task['urgentAt']:
+        task['urgentAt'] = task['elevateAt']
 
 # ---- normalise ------------------------------------------------------------
 out_tasks = []
@@ -163,6 +178,7 @@ for t in tasks.values():
         'company': t.get('company') or (users.get(driver) or {}).get('company'),
         'flight': t.get('flight'), 'uld': t.get('uld') or '?', 'type': t['type'], 'urgent': t['urgent'],
         'full': full, 'driver': driver, 'ev': clean,
+        'urgentAt': t.get('urgentAt') if t['urgent'] else None, 'elevateAt': t.get('elevateAt'), 'due': t.get('due'),
     })
 
 for f in flights.values():

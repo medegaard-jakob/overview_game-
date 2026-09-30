@@ -74,6 +74,7 @@ for c in rows('CargoTasks.csv'):
         'drop': locs.get(c['DropOffLocationId'], {}).get('Name'),
         'loaded_flag': (cargos.get(c['CargoId']) or {}).get('IsLoaded'),
         'flight': nul(c['FlightId']),
+        'urgent': c['Priority'] == 'Urgent', 'due': ts(c['LatestFinishTime']),
     }
 delivered = [t for t in raw.values() if t['status'] == 'Delivered' and t['finish']]
 
@@ -170,7 +171,7 @@ if RUN_PAGE:
 
     in_org = lambda c, o: o == 'all' or c == o
     # B1 delivered today + runs completed
-    bad_f, bad_r, bad_fl = [], [], []
+    bad_f, bad_r, bad_fl, bad_u = [], [], [], []
     for s in snaps:
         T, o, d0 = s['t'], s['org'], s['t'] // 86400 * 86400
         mine = [t for t in delivered if in_org(t['company'], o)]
@@ -187,11 +188,19 @@ if RUN_PAGE:
         maybe = sum(1 for f in by_order.values() if T - TOL < max(f) <= T + TOL)
         if not (sure <= s['stats']['runs'] <= sure + maybe + len(extra)):
             bad_r.append(f"{fmt(T)} {o}: runs page {s['stats']['runs']}, DB {sure}(+{maybe})")
+        for key, pred in (('urgent', lambda t: t['urgent']), ('late', lambda t: t['due'] and t['finish'] > t['due'] + TOL)):
+            loose = (lambda t: t['due'] and t['finish'] > t['due'] - TOL) if key == 'late' else pred
+            sure = sum(1 for t in mine if pred(t) and d0 <= t['finish'] <= T - TOL)
+            most = sum(1 for t in mine if loose(t) and d0 <= t['finish'] <= T + TOL)
+            if not (sure <= s['stats'][key] <= most + len(extra)):
+                bad_u.append(f"{fmt(T)} {o}: {key} delivered today page {s['stats'][key]}, DB {sure}..{most}")
         sure = {t['flight'] for t in mine if t['flight'] and d0 <= t['finish'] <= T - TOL}
         maybe = {t['flight'] for t in mine if t['flight'] and d0 <= t['finish'] <= T + TOL} - sure
         if not (len(sure) <= s['stats']['flights'] <= len(sure) + len(maybe) + len(extra)):
             bad_fl.append(f"{fmt(T)} {o}: flights processed page {s['stats']['flights']}, DB {len(sure)}(+{len(maybe)})")
     check('B', 'Counters: full/empty ULDs delivered today', len(bad_f), len(snaps) * 2, '{bad} of {total} counter readings disagree with the DB', bad_f)
+    check('B', 'Day summary: urgent and late deliveries', len(bad_u), len(snaps) * 2,
+          '{bad} of {total} readings disagree with CargoTasks.Priority / LatestFinishTime', bad_u)
     check('B', 'Day summary: flights processed', len(bad_fl), len(snaps), '{bad} of {total} readings disagree with the DB', bad_fl)
     check('B', 'Counters: runs completed today', len(bad_r), len(snaps), '{bad} of {total} readings disagree with the DB', bad_r)
 
