@@ -497,7 +497,11 @@ function frame(T) {
     if (t.del && o.vd != null) {
       const arrive = Math.max(o.vd, t.del);
       let leave = arrive + 25 * 60;
-      if (!to.hall) { const f = planeAt.get(to.id) || flights[t.flight]; const out = f && (f.etd || f.std); leave = out && out > arrive ? out : arrive + 45 * 60; }
+      if (!to.hall) {
+        // stay until this ULD's own flight departs (max 3 h), never the next flight on the same stand
+        const f = flights[t.flight], out = f && (f.etd || f.std);
+        leave = out && out > arrive ? Math.min(out, arrive + 3 * 3600) : arrive + 45 * 60;
+      }
       if (T >= arrive && T < leave) add(to, t, to.hall ? .85 : 1);
     }
   });
