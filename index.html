@@ -67,8 +67,17 @@ button[aria-pressed="true"] { border-color: var(--paint); color: var(--paint); }
 .stage:fullscreen #apron { width: min(100%, calc((100vh - 32px) * var(--ratio, 2))); }
 .mapbtns { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 6px; }
 .mapbtns button { background: rgba(19,25,34,.82); backdrop-filter: blur(4px); font-size: 11.5px; padding: 4px 10px; }
-.main.wide { grid-template-columns: minmax(0, 1fr); }
-.main.wide aside { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+.leftcol { display: grid; gap: 14px; min-width: 0; }
+.main.wide { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.main.wide .leftcol { display: contents; }
+.main.wide .stage, .main.wide .timeline { grid-column: 1 / -1; }
+.main.wide .ticker { max-height: 560px; }
+@media (max-width: 980px) { .main.wide { grid-template-columns: minmax(0, 1fr); } }
+.drv.off .job { display: none; }
+.main.wide aside { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "day drivers" "key drivers"; align-content: start; }
+.main.wide #cardDay { grid-area: day; } .main.wide #cardDrivers { grid-area: drivers; align-self: start; }
+.card { align-content: start; } .main.wide #cardKey { grid-area: key; }
+@media (max-width: 760px) { .main.wide aside { grid-template-columns: minmax(0, 1fr); grid-template-areas: "day" "drivers" "key"; } }
 #apron { display: block; width: 100%; height: auto; border-radius: 8px; cursor: crosshair; }
 
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -114,7 +123,7 @@ aside { display: grid; gap: 14px; min-width: 0; }
 .sw.uldf { background: var(--full); box-shadow: inset 0 -3px #b86f00; }
 .sw.ulde { border: 2px solid var(--empty); background: #0f2322; }
 
-.ticker { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 11.5px; max-height: 250px; overflow-y: auto; }
+.ticker { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 11.5px; max-height: 320px; overflow-y: auto; }
 .ticker li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 6px; }
 .ticker time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .ticker .v { font-weight: 600; }
@@ -152,21 +161,34 @@ aside { display: grid; gap: 14px; min-width: 0; }
   <div class="stats" id="stats"></div>
 
   <div class="main" id="mainTop">
+    <div class="leftcol">
     <div class="stage" id="stage"><canvas id="apron" aria-label="Pixel map of baggage hall, service roads and aircraft stands with tugs moving ULDs"></canvas>
       <div class="mapbtns"><button type="button" id="enlarge" aria-pressed="false">Enlarge map</button><button type="button" id="fs">Full screen</button></div>
     </div>
+    <section class="timeline">
+      <div class="head">
+        <span class="label">ULDs delivered per hour · <span style="color:var(--full)">full</span> / <span style="color:var(--empty)">empty</span> · drag to scrub</span>
+        <div class="days" id="days"></div>
+      </div>
+      <canvas id="tl"></canvas>
+    </section>
+    <section class="card">
+      <h2><span class="label">Order log</span><span class="label">latest first</span></h2>
+      <ul class="ticker" id="ticker"></ul>
+    </section>
+    </div>
     <aside>
-      <section class="card">
+      <section class="card" id="cardDay">
         <h2><span class="label">Day summary</span><span class="label" id="dayName"></span></h2>
         <div class="daygrid" id="daygrid"></div>
         <div class="urgrid" id="urgrid"></div>
         <div class="flchips" id="flchips"></div>
       </section>
-      <section class="card">
+      <section class="card" id="cardDrivers">
         <h2><span class="label">Drivers</span><span class="label" id="onShift"></span></h2>
         <div class="roster" id="roster"></div>
       </section>
-      <section class="card">
+      <section class="card" id="cardKey">
         <h2><span class="label">Key</span></h2>
         <div class="legend">
           <div><span class="sw uldf"></span>Full ULD (bags)</div>
@@ -180,28 +202,16 @@ aside { display: grid; gap: 14px; min-width: 0; }
           <div><span class="sw" style="background:var(--full);box-shadow:inset 0 -3px var(--alert)"></span>Delivered late</div>
           <div><span class="ub" style="margin:0">URGENT</span>Tug on an urgent run</div>
         </div>
+        <p class="note">Positions are simulated: tugs drive the map at a steady speed between the real status
+      timestamps (accepted → collected → delivered). When a driver confirmed a step before the tug could
+      physically get there, the animation catches up; the panel always shows the logged status.
+      ULDs leaving Empty Can Storage count as empty, everything leaving a chute or Early Can Storage counts as full.</p>
+
       </section>
     </aside>
   </div>
 
-  <section class="timeline">
-    <div class="head">
-      <span class="label">ULDs delivered per hour · <span style="color:var(--full)">full</span> / <span style="color:var(--empty)">empty</span> · drag to scrub</span>
-      <div class="days" id="days"></div>
-    </div>
-    <canvas id="tl"></canvas>
-  </section>
 
-  <div class="main">
-    <section class="card">
-      <h2><span class="label">Order log</span><span class="label">latest first</span></h2>
-      <ul class="ticker" id="ticker"></ul>
-    </section>
-    <p class="note">Positions are simulated: tugs drive the map at a steady speed between the real status
-      timestamps (accepted → collected → delivered). When a driver confirmed a step before the tug could
-      physically get there, the animation catches up; the panel always shows the logged status.
-      ULDs leaving Empty Can Storage count as empty, everything leaving a chute or Early Can Storage counts as full.</p>
-  </div>
 </div>
 
 <script src="data/replay.js"></script>
