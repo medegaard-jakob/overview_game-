@@ -37,7 +37,7 @@ body {
   padding-inline: 16px;
   padding-block: 14px 28px;
 }
-.wrap { max-width: 1360px; margin: 0 auto; display: grid; gap: 14px; }
+.wrap { max-width: 1760px; margin: 0 auto; display: grid; gap: 14px; }
 header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
 h1 { font: 700 22px/1 var(--f-display); letter-spacing: .02em; margin: 0; text-wrap: balance; }
 h1 small { display: block; font: 400 12px/1.4 var(--f-body); color: var(--muted); margin-top: 6px; letter-spacing: 0; }
@@ -61,7 +61,13 @@ button[aria-pressed="true"] { border-color: var(--paint); color: var(--paint); }
 
 .main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
 @media (max-width: 980px) { .main { grid-template-columns: minmax(0, 1fr); } }
-.stage { background: #0d1117; border: 1px solid var(--line); border-radius: 12px; padding: 6px; min-width: 0; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.stage { position: relative; background: #0d1117; border: 1px solid var(--line); border-radius: 12px; padding: 6px; min-width: 0; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.stage:fullscreen { display: grid; place-items: center; padding: 16px; border-radius: 0; }
+.stage:fullscreen #apron { width: min(100%, calc((100vh - 32px) * var(--ratio, 2))); }
+.mapbtns { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 6px; }
+.mapbtns button { background: rgba(19,25,34,.82); backdrop-filter: blur(4px); font-size: 11.5px; padding: 4px 10px; }
+.main.wide { grid-template-columns: minmax(0, 1fr); }
+.main.wide aside { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
 #apron { display: block; width: 100%; height: auto; border-radius: 8px; cursor: crosshair; }
 
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -143,8 +149,10 @@ aside { display: grid; gap: 14px; min-width: 0; }
 
   <div class="stats" id="stats"></div>
 
-  <div class="main">
-    <div class="stage"><canvas id="apron" aria-label="Pixel map of baggage hall, service roads and aircraft stands with tugs moving ULDs"></canvas></div>
+  <div class="main" id="mainTop">
+    <div class="stage" id="stage"><canvas id="apron" aria-label="Pixel map of baggage hall, service roads and aircraft stands with tugs moving ULDs"></canvas>
+      <div class="mapbtns"><button type="button" id="enlarge" aria-pressed="false">Enlarge map</button><button type="button" id="fs">Full screen</button></div>
+    </div>
     <aside>
       <section class="card">
         <h2><span class="label">Day summary</span><span class="label" id="dayName"></span></h2>
@@ -209,7 +217,8 @@ const C = {
 const TAIL = { UA: '#3b6fd8', EI: '#27a56b' };
 
 // ---------- world layout (logical pixels) ----------
-const W = 640, H = 306;
+const W = 640;
+let H = 306;          // shrinks to one stand row when a day has 12 stands or fewer
 const ROAD = { r1: 108, r2: 208 };
 const CONNECT = [5, W - 5];
 const SPEED = 2.4;              // px per simulated second (~15 km/h tug)
@@ -246,6 +255,7 @@ function layoutStands(list) {
     l.road = row ? 'r2' : 'r1';
   });
   routeCache.clear();
+  H = list.length <= 12 ? ROAD.r2 + 10 : 306;
 }
 D.locations.forEach(l => l.label = shortName(l));
 
@@ -460,7 +470,10 @@ let bgDirty = true, layoutKey = null;
 function sizeApron() {
   const w = cv.clientWidth || W;
   const s = Math.max(2, Math.min(4, Math.ceil(w * (window.devicePixelRatio || 1) / W)));
-  if (s !== S) { S = s; cv.width = bg.width = W * S; cv.height = bg.height = H * S; bgDirty = true; }
+  if (s !== S || cv.height !== H * s) {
+    S = s; cv.width = bg.width = W * S; cv.height = bg.height = H * S; bgDirty = true;
+    cv.parentElement.style.setProperty('--ratio', W / H);
+  }
   if (bgDirty) { bgDirty = false; drawBackground(); }
 }
 // Stands relevant to the shown day and organisation: used by a ULD task that is active that day
@@ -935,6 +948,23 @@ function buildOrgFilter() {
   });
 }
 buildOrgFilter();
+
+// map size: enlarge (sidebar moves below the map) or full screen
+function setWide(on) {
+  $('mainTop').classList.toggle('wide', on);
+  $('enlarge').setAttribute('aria-pressed', String(on));
+  $('enlarge').textContent = on ? 'Shrink map' : 'Enlarge map';
+  try { localStorage.setItem('apron-wide', on ? '1' : ''); } catch (e) { /* storage unavailable */ }
+}
+$('enlarge').addEventListener('click', () => setWide(!$('mainTop').classList.contains('wide')));
+try { if (localStorage.getItem('apron-wide')) setWide(true); } catch (e) { /* storage unavailable */ }
+$('fs').addEventListener('click', () => {
+  const st = $('stage');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else if (st.requestFullscreen) st.requestFullscreen().catch(() => setWide(true));
+  else setWide(true);
+});
+document.addEventListener('fullscreenchange', () => { $('fs').textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
 
 // Read-only hook for tools/validate.py: jump to a moment and report exactly what the page shows.
 window.apronDebug = {
