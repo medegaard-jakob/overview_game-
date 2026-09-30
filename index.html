@@ -64,7 +64,7 @@ button[aria-pressed="true"] { border-color: var(--paint); color: var(--paint); }
 .stage { background: #0d1117; border: 1px solid var(--line); border-radius: 12px; padding: 6px; min-width: 0; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
 #apron { display: block; width: 100%; height: auto; border-radius: 8px; cursor: crosshair; }
 
-.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .stat { background: var(--panel); padding: 8px 12px; display: grid; gap: 2px; }
 .stat b { font: 700 20px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
@@ -87,6 +87,15 @@ aside { display: grid; gap: 14px; min-width: 0; }
 .pill { font: 600 10.5px var(--f-display); letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; white-space: nowrap; color: #11151a; justify-self: end; }
 .drv.off { opacity: .45; }
 
+.daygrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.ds { display: grid; gap: 3px; min-width: 0; }
+.ds b { font: 700 24px/1 var(--f-display); }
+.ds small { color: var(--muted); font-size: 11.5px; }
+.bar { height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 99px; }
+.flchips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 11.5px; padding: 1px 8px; border-radius: 99px; background: #232d3d; white-space: nowrap; }
+.chip b { font-weight: 800; }
 .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 11.5px; }
 .legend div { display: flex; gap: 7px; align-items: center; }
 .sw { width: 12px; height: 12px; flex: none; border-radius: 1px; }
@@ -133,6 +142,11 @@ aside { display: grid; gap: 14px; min-width: 0; }
   <div class="main">
     <div class="stage"><canvas id="apron" aria-label="Pixel map of baggage hall, service roads and aircraft stands with tugs moving ULDs"></canvas></div>
     <aside>
+      <section class="card">
+        <h2><span class="label">Day summary</span><span class="label" id="dayName"></span></h2>
+        <div class="daygrid" id="daygrid"></div>
+        <div class="flchips" id="flchips"></div>
+      </section>
       <section class="card">
         <h2><span class="label">Drivers</span><span class="label" id="onShift"></span></h2>
         <div class="roster" id="roster"></div>
@@ -664,13 +678,36 @@ function renderPanels(T, res) {
   drivers.forEach(d => d.el.hidden = !inOrg(d.company));
   const on = res.states.filter(s => s.st.k !== 'off').length;
   const moving = res.states.filter(s => s.st.k === 'carry' || s.st.k === 'dh').length;
-  lastStats = { full, empty, runs, waiting: res.waiting, moving, onShift: on };
+  // day summary: so far vs the whole (UTC) day
+  const d1 = d0 + 86400, day = { full: 0, empty: 0, runs: 0 };
+  const flSoFar = new Map(), flDay = new Set();
+  D.tasks.forEach(t => {
+    if (!t.del || t.del < d0 || t.del >= d1 || !inOrg(t.company)) return;
+    t.full ? day.full++ : day.empty++;
+    if (t.flight && flights[t.flight]) {
+      flDay.add(t.flight);
+      if (t.del <= T) { const e = flSoFar.get(t.flight) || { n: 0, last: 0 }; e.n++; e.last = Math.max(e.last, t.del); flSoFar.set(t.flight, e); }
+    }
+  });
+  orders.forEach(o => { if (o.d && o.d >= d0 && o.d < d1 && inOrg(o.company)) day.runs++; });
+  $('dayName').textContent = fmtD(T);
+  $('daygrid').innerHTML = [
+    ['Full delivered', full, day.full, C.full],
+    ['Empty delivered', empty, day.empty, C.empty],
+    ['Flights processed', flSoFar.size, flDay.size, C.paint],
+    ['Trips completed', runs, day.runs, C.ink],
+  ].map(([l, v, tot, c]) => `<div class="ds"><span class="label">${l}</span><b style="color:${c}">${v}</b>
+    <div class="bar"><i style="width:${tot ? Math.round(v / tot * 100) : 0}%;background:${c}"></i></div><small>of ${tot} today</small></div>`).join('');
+  $('flchips').innerHTML = [...flSoFar.entries()].sort((a, b) => b[1].last - a[1].last).slice(0, 16)
+    .map(([id, e]) => `<span class="chip" title="${e.n} ULDs delivered">${flights[id].no} <b>${e.n}</b></span>`).join('');
+
+  const inTransit = res.states.reduce((n, s) => n + (s.st.k === 'carry' || s.st.k === 'atdrop' ? s.st.o.tasks.length : 0), 0);
+  lastStats = { full, empty, runs, flights: flSoFar.size, waiting: res.waiting, inTransit, moving, onShift: on };
   $('stats').innerHTML = [
-    ['Full ULDs delivered today', full, C.full],
-    ['Empty ULDs delivered today', empty, C.empty],
-    ['Runs completed today', runs, C.ink],
     ['ULDs waiting for a tug', res.waiting, res.waiting > 12 ? C.alert : C.ink],
+    ['ULDs on the move', inTransit, C.ink],
     ['Tugs moving / on shift', `${moving}/${on}`, C.ink],
+    ['Planes on stand', res.planeAt.size, C.ink],
   ].map(([l, v, c]) => `<div class="stat"><span class="label">${l}</span><b style="color:${c}">${v}</b></div>`).join('');
   $('onShift').textContent = `${on} on shift`;
   res.states.forEach(({ d, st }) => {
