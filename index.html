@@ -612,6 +612,8 @@ let tlW = 0, tlH = 0, dpr = 1;
 function sizeTL() { dpr = window.devicePixelRatio || 1; tlW = tl.clientWidth; tlH = tl.clientHeight; tl.width = tlW * dpr; tl.height = tlH * dpr; }
 const maxBin = Math.max(...bins.map(b => b[0] + b[1]));
 function drawTL(T) {
+  if (tl.clientWidth !== tlW || tl.clientHeight !== tlH) sizeTL();   // page may have loaded hidden or at 0 width
+  if (!tlW || !tlH) return;
   const g = tctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, tlW, tlH);
   const top = 14, base = tlH - 4, bw = tlW / nBins;
   g.fillStyle = '#20262e';
@@ -626,7 +628,7 @@ function drawTL(T) {
     const x = (t - tMin) / 3600 * bw;
     g.fillStyle = '#3a434f'; g.fillRect(x, 0, 1, tlH);
   }
-  for (let t = dayStart(tMin); t < tMax; t += 86400) {
+  for (let t = dayStart(tMin); t < tMax && bw * 24 > 90; t += 86400) {
     const x = Math.max(0, (t - tMin) / 3600 * bw) + 4;
     g.fillStyle = C.muted; g.fillText(fmtD(Math.max(t, tMin)).toUpperCase(), x, 1);
   }
