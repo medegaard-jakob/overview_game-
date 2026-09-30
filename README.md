@@ -23,3 +23,26 @@ and writes `data/replay.json` + `data/replay.js`.
 Status timestamps come from the transport-order event logs; tasks missing from the logs fall back to the
 `CargoTasks.csv` actual start/finish times. A ULD leaving Empty Can Storage counts as empty; everything else counts as full.
 Tug movement between timestamps is simulated at a constant speed.
+Flights with "Beumer" in the flight number are vendor test flights and are left out, together with their orders.
+
+## Validating the replay
+
+```
+cd tools && npm install && cd ..        # once: Playwright for the on-screen checks
+python3 tools/validate.py path/to/extracted/Data
+```
+
+`validate.py` recomputes the expected values straight from the raw CSV export, without using
+`data/replay.json`, and writes `validation-report.md`:
+
+- **Part A:** the replay data vs the raw export. Every task present, final status, delivered
+  time, driver, organisation, full/empty rule and event order.
+- **Part B:** what the page shows vs the raw export, at 6 moments per day for All / Menzies / United.
+  Counters, runs, organisation filter sums, hourly chart total, driver busy/idle, planes on stand.
+
+Checks are PASS, WARN (a documented simplification or a fact about the data) or FAIL.
+The script exits with code 1 if anything fails.
+
+In Claude Code you can also ask for the **replay-validator** agent (`.claude/agents/replay-validator.md`).
+It rebuilds the data, runs the checks, traces every failure back to the raw rows, spot-checks a few
+orders end to end and reports whether the replay can be trusted.

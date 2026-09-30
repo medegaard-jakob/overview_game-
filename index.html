@@ -638,7 +638,7 @@ function frame(T) {
     d._p = p;
   });
   tags.forEach(([t, x, y, c]) => pill(t, x, y, c, '#12161c', 6));
-  return { states, waiting };
+  return { states, waiting, planeAt, piles };
 }
 
 // ---------- panels ----------
@@ -656,6 +656,7 @@ drivers.forEach(d => {
   b.addEventListener('click', () => { selected = selected === d.id ? null : d.id; render(true); });
   roster.append(b); d.el = b;
 });
+let lastStats = null;
 function renderPanels(T, res) {
   $('clockT').textContent = fmtT(T);
   $('clockD').textContent = fmtD(T) + ' UTC';
@@ -666,6 +667,7 @@ function renderPanels(T, res) {
   drivers.forEach(d => d.el.hidden = !inOrg(d.company));
   const on = res.states.filter(s => s.st.k !== 'off').length;
   const moving = res.states.filter(s => s.st.k === 'carry' || s.st.k === 'dh').length;
+  lastStats = { full, empty, runs, waiting: res.waiting, moving, onShift: on };
   $('stats').innerHTML = [
     ['Full ULDs delivered today', full, C.full],
     ['Empty ULDs delivered today', empty, C.empty],
@@ -779,6 +781,31 @@ function buildOrgFilter() {
   });
 }
 buildOrgFilter();
+
+// Read-only hook for tools/validate.py: jump to a moment and report exactly what the page shows.
+window.apronDebug = {
+  snapshot(t, o = 'all') {
+    playing = false; syncPlay();
+    org = o; computeBins(); buildOrgFilter();
+    T = t; drivers.forEach(d => d._p = null);
+    const res = frame(T); renderPanels(T, res); drawTL(T);
+    const piles = {};
+    res.piles.forEach((list, id) => {
+      const p = piles[byId[id].name] = { full: 0, empty: 0 };
+      list.forEach(([task]) => task.full ? p.full++ : p.empty++);
+    });
+    return {
+      t: T, org, stats: lastStats,
+      drivers: res.states.map(({ d, st }) => ({ id: d.id, tag: d.tag, company: d.company, status: statusOf(st).text, order: st.o && st.k !== 'idle' ? st.o.id : null })),
+      rosterVisible: drivers.filter(d => !d.el.hidden).map(d => d.tag),
+      planes: [...res.planeAt.entries()].map(([id, f]) => ({ stand: byId[id].name, flight: f.no, flightId: f.id })),
+      piles,
+      chartTotal: bins.reduce((a, b) => a + b[0] + b[1], 0),
+      logTop: [...document.querySelectorAll('#ticker li')].map(li => li.textContent.trim()).slice(0, 5),
+    };
+  },
+  range: () => ({ tMin, tMax }),
+};
 document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playing = !playing; syncPlay(); } });
 syncPlay();
 

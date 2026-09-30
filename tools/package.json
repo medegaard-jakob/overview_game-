@@ -1,0 +1,8 @@
+{
+  "name": "baggage-apron-replay-tools",
+  "private": true,
+  "description": "Headless snapshots of the replay page for tools/validate.py",
+  "devDependencies": {
+    "playwright": "^1.47.0"
+  }
+}
