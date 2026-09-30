@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Baggage Apron Replay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control-room screen. Pixel apron (canvas) is the hero, driver roster to the right,
+   hourly throughput strip underneath doubles as the time scrubber.
+   Single dark look on purpose: apron under floodlights. */
+:root {
+  --ground: #101419;
+  --panel: #181d24;
+  --line: #29313b;
+  --ink: #e9e4d6;
+  --muted: #8a95a2;
+  --paint: #f2c230;   /* apron paint */
+  --full: #ffb238;    /* loaded ULD run */
+  --empty: #4fd1c5;   /* empty ULD run */
+  --pickup: #9db0ff;  /* driving to pickup, no load */
+  --idle: #7d8793;
+  --alert: #ff6b5e;
+  --f-display: "Silkscreen", "Courier New", monospace;
+  --f-body: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 13px/1.45 var(--f-body);
+  padding-inline: 16px;
+  padding-block: 14px 28px;
+}
+.wrap { max-width: 1360px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { font: 700 22px/1 var(--f-display); letter-spacing: .02em; margin: 0; text-wrap: balance; }
+h1 small { display: block; font: 400 12px/1.4 var(--f-body); color: var(--muted); margin-top: 6px; letter-spacing: 0; }
+.clock { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; }
+.clock .t { font: 700 30px/1 var(--f-display); color: var(--paint); }
+.clock .d { font: 400 13px var(--f-display); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button, select {
+  font: 500 12px var(--f-body); color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 3px; padding: 6px 10px; cursor: pointer;
+}
+button:hover, select:hover { border-color: var(--muted); }
+button:focus-visible, select:focus-visible, .drv:focus-visible { outline: 2px solid var(--paint); outline-offset: 1px; }
+button.primary { background: var(--paint); color: #1a1406; border-color: var(--paint); font-weight: 600; min-width: 74px; }
+button[aria-pressed="true"] { border-color: var(--paint); color: var(--paint); }
+.label { font: 400 10px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+@media (max-width: 980px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.stage { background: #0b0e12; border: 1px solid var(--line); border-radius: 4px; padding: 6px; min-width: 0; }
+#apron { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; cursor: crosshair; }
+
+.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+@media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { background: var(--panel); padding: 8px 12px; display: grid; gap: 2px; }
+.stat b { font: 700 20px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+
+aside { display: grid; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; display: grid; gap: 8px; min-width: 0; }
+.card h2 { margin: 0; display: flex; justify-content: space-between; align-items: baseline; }
+.roster { display: grid; gap: 4px; }
+.drv {
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center;
+  padding: 6px 6px; border-radius: 3px; border: 1px solid transparent; cursor: pointer; background: transparent;
+  text-align: left; width: 100%; font: inherit; color: inherit;
+}
+.drv:hover { background: #1f252e; }
+.drv.sel { border-color: var(--paint); background: #1f252e; }
+.drv .tag { font: 700 12px var(--f-display); grid-row: span 2; }
+.drv .co { color: var(--muted); font-size: 11px; }
+.drv .job { grid-column: 2 / 4; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drv .job em { font-style: normal; color: var(--ink); }
+.pill { font: 400 9.5px var(--f-display); letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; white-space: nowrap; color: #11151a; justify-self: end; }
+.drv.off { opacity: .45; }
+
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 11.5px; }
+.legend div { display: flex; gap: 7px; align-items: center; }
+.sw { width: 12px; height: 12px; flex: none; border-radius: 1px; }
+.sw.uldf { background: var(--full); box-shadow: inset 0 -3px #b86f00; }
+.sw.ulde { border: 2px solid var(--empty); background: #0f2322; }
+
+.ticker { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 11.5px; max-height: 250px; overflow-y: auto; }
+.ticker li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 6px; }
+.ticker time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ticker .v { font-weight: 600; }
+
+.timeline { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px 6px; display: grid; gap: 4px; }
+.timeline .head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; }
+#tl { width: 100%; height: 78px; display: block; cursor: ew-resize; touch-action: none; }
+.days { display: flex; flex-wrap: wrap; gap: 6px; }
+.note { color: var(--muted); font-size: 11.5px; max-width: 95ch; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Baggage Apron Replay
+      <small>T1 baggage hall → Terminal 2 apron stands · ULD transport orders, 21–25 Sep 2026 · UTC</small>
+    </h1>
+    <div class="clock" aria-live="off"><span class="t" id="clockT">--:--</span><span class="d" id="clockD"></span></div>
+    <div class="controls">
+      <button class="primary" id="play" type="button">Pause</button>
+      <label class="label" for="speed">Speed</label>
+      <select id="speed">
+        <option value="10">10×</option>
+        <option value="30">30×</option>
+        <option value="60" selected>60×</option>
+        <option value="180">180×</option>
+        <option value="600">600×</option>
+      </select>
+      <button id="skip" type="button" title="Jump to the next dispatched order">Next order ›</button>
+    </div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="main">
+    <div class="stage"><canvas id="apron" aria-label="Pixel map of baggage hall, service roads and aircraft stands with tugs moving ULDs"></canvas></div>
+    <aside>
+      <section class="card">
+        <h2><span class="label">Drivers</span><span class="label" id="onShift"></span></h2>
+        <div class="roster" id="roster"></div>
+      </section>
+      <section class="card">
+        <h2><span class="label">Key</span></h2>
+        <div class="legend">
+          <div><span class="sw uldf"></span>Full ULD (bags)</div>
+          <div><span class="sw ulde"></span>Empty ULD</div>
+          <div><span class="sw" style="background:var(--full)"></span>Full run</div>
+          <div><span class="sw" style="background:var(--empty)"></span>Empty run</div>
+          <div><span class="sw" style="background:var(--pickup)"></span>To pickup, no load</div>
+          <div><span class="sw" style="background:var(--idle)"></span>Idle / waiting</div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <section class="timeline">
+    <div class="head">
+      <span class="label">ULDs delivered per hour · <span style="color:var(--full)">full</span> / <span style="color:var(--empty)">empty</span> · drag to scrub</span>
+      <div class="days" id="days"></div>
+    </div>
+    <canvas id="tl"></canvas>
+  </section>
+
+  <div class="main">
+    <section class="card">
+      <h2><span class="label">Order log</span><span class="label">latest first</span></h2>
+      <ul class="ticker" id="ticker"></ul>
+    </section>
+    <p class="note">Positions are simulated: tugs drive the map at a steady speed between the real status
+      timestamps (accepted → collected → delivered). When a driver confirmed a step before the tug could
+      physically get there, the animation catches up; the panel always shows the logged status.
+      ULDs leaving Empty Can Storage count as empty, everything leaving a chute or Early Can Storage counts as full.</p>
+  </div>
+</div>
+
+<script src="data/replay.js"></script>
+<script>
+(() => {
+'use strict';
+const D = window.REPLAY_DATA;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = {
+  paint: css('--paint'), full: css('--full'), empty: css('--empty'), pickup: css('--pickup'),
+  idle: css('--idle'), alert: css('--alert'), ink: css('--ink'), muted: css('--muted'),
+  tarmac: '#23282f', tarmac2: '#262b33', road: '#1a1e24', hall: '#2e3440', hallRoof: '#3a4150',
+  wall: '#5b6475', belt: '#44403a', plane: '#dfe3e9', planeShade: '#9aa4b1',
+};
+const TAIL = { UA: '#3b6fd8', EI: '#27a56b' };
+
+// ---------- world layout (logical pixels) ----------
+const W = 640, H = 306;
+const ROAD = { r1: 108, r2: 208 };
+const CONNECT = [5, W - 5];
+const SPEED = 2.4;              // px per simulated second (~15 km/h tug)
+const byId = Object.fromEntries(D.locations.map(l => [l.id, l]));
+const flights = Object.fromEntries(D.flights.map(f => [f.id, f]));
+const users = Object.fromEntries(D.drivers.map(u => [u.id, u]));
+
+function shortName(l) {
+  if (l.type === 'EmptyStorage') return 'EMPTY CANS';
+  if (l.type === 'EarlyStorage') return 'EARLY CANS';
+  let m = l.name.match(/^(\w+) Bank ?(\d*)$/);
+  if (m) return (m[1] === 'United' ? 'UA' : m[1] === 'Menzies' ? 'MZ' : m[1]) + (m[2] ? ' B' + m[2] : ' BANK');
+  return l.name;
+}
+const hall = D.locations.filter(l => l.type !== 'FlightStand');
+const chutes = hall.filter(l => l.type === 'Chute').sort((a, b) => a.name.localeCompare(b.name));
+hall.forEach(l => { l.dy = 96; l.road = 'r1'; l.hall = true; });
+hall.filter(l => l.type === 'EmptyStorage').forEach(l => l.x = 52);
+hall.filter(l => l.type === 'EarlyStorage').forEach(l => l.x = W - 52);
+chutes.forEach((l, i) => l.x = Math.round(chutes.length === 1 ? W / 2 : 140 + i * (360 / (chutes.length - 1))));
+const stands = D.locations.filter(l => l.type === 'FlightStand')
+  .sort((a, b) => parseInt(a.name) - parseInt(b.name) || a.name.localeCompare(b.name));
+const perRow = Math.ceil(stands.length / 2);
+const sp = Math.min(50, (W - 60) / perRow);
+stands.forEach((l, i) => {
+  const row = i < perRow ? 0 : 1, k = row ? i - perRow : i;
+  l.x = Math.round(34 + sp / 2 + k * sp);
+  l.dy = row ? ROAD.r2 + 8 : ROAD.r1 + 8;
+  l.road = row ? 'r2' : 'r1';
+});
+D.locations.forEach(l => l.label = shortName(l));
+
+// ---------- paths ----------
+function mkPath(pts) {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.abs(pts[i][0] - pts[i - 1][0]) + Math.abs(pts[i][1] - pts[i - 1][1]));
+  return { pts, cum, len: cum[cum.length - 1] };
+}
+function pointAt(p, s) {
+  s = Math.max(0, Math.min(p.len, s));
+  let i = 1; while (i < p.cum.length - 1 && p.cum[i] < s) i++;
+  const [x0, y0] = p.pts[i - 1], [x1, y1] = p.pts[i];
+  const seg = p.cum[i] - p.cum[i - 1] || 1, f = (s - p.cum[i - 1]) / seg;
+  const dx = Math.sign(x1 - x0), dy = Math.sign(y1 - y0);
+  // keep right: offset by lane depending on direction
+  const lane = 2.5;
+  return { x: x0 + (x1 - x0) * f - dy * lane, y: y0 + (y1 - y0) * f + dx * lane, dx, dy };
+}
+const routeCache = new Map();
+function route(a, b) {
+  const key = a.id + b.id;
+  if (routeCache.has(key)) return routeCache.get(key);
+  const pts = [[a.x, a.dy], [a.x, ROAD[a.road]]];
+  if (a.road === b.road) pts.push([b.x, ROAD[b.road]]);
+  else {
+    const cx = (a.x + b.x) / 2 < W / 2 ? CONNECT[0] : CONNECT[1];
+    pts.push([cx, ROAD[a.road]], [cx, ROAD[b.road]], [b.x, ROAD[b.road]]);
+  }
+  pts.push([b.x, b.dy]);
+  const p = mkPath(pts); routeCache.set(key, p); return p;
+}
+
+// ---------- orders & driver timelines ----------
+const firstT = (t, st) => { const e = t.ev.find(e => e[1] === st); return e ? e[0] : null; };
+const lastT = (t, st) => { let r = null; t.ev.forEach(e => { if (e[1] === st) r = e[0]; }); return r; };
+const orders = new Map();
+D.tasks.forEach(t => {
+  t.ready = t.ev[0][0];
+  t.acc = firstT(t, 'accepted'); t.col = firstT(t, 'collected');
+  t.del = lastT(t, 'delivered'); t.can = lastT(t, 'cancelled');
+  if (t.can && t.del && t.del > t.can) t.can = null;
+  let o = orders.get(t.order);
+  if (!o) orders.set(t.order, o = { id: t.order, no: t.orderNo, tasks: [], driver: null });
+  o.tasks.push(t); t.o = o;
+});
+orders.forEach(o => {
+  const ts = o.tasks, min = a => a.length ? Math.min(...a) : null, max = a => a.length ? Math.max(...a) : null;
+  o.driver = ts.map(t => t.driver).find(Boolean) || null;
+  o.a = min(ts.map(t => t.acc).filter(Boolean));
+  o.c = min(ts.map(t => t.col).filter(Boolean));
+  o.d = max(ts.map(t => t.del).filter(Boolean));
+  o.x = ts.every(t => t.can) ? max(ts.map(t => t.can)) : null;
+  if (!o.a && o.c) o.a = o.c;
+  o.from = byId[ts[0].from]; o.to = byId[ts[0].to];
+  o.full = ts.some(t => t.full);
+  o.nFull = ts.filter(t => t.full).length; o.nEmpty = ts.length - o.nFull;
+  o.flight = flights[ts.find(t => t.flight)?.flight] || null;
+  o.ready = min(ts.map(t => t.ready));
+});
+
+const drivers = D.drivers.map((u, i) => ({ ...u, idx: i, tag: u.name.replace(/^driver/i, '').toUpperCase(), segs: [], orders: [] }))
+  .sort((a, b) => a.tag.localeCompare(b.tag));
+const drvById = Object.fromEntries(drivers.map(d => [d.id, d]));
+orders.forEach(o => { if (o.driver && o.a && drvById[o.driver]) drvById[o.driver].orders.push(o); });
+
+function travel(len, start, actual) {
+  const base = len / SPEED;
+  return start - actual > 60 ? Math.max(20, base * 0.35) : base;   // catch up when running late
+}
+drivers.forEach(d => {
+  d.orders.sort((a, b) => a.a - b.a);
+  let pos = null, t = -Infinity, lastPath = null;
+  for (const o of d.orders) {
+    const pick = o.from, drop = o.to;
+    let now = Math.max(o.a, t);
+    if (pos && pos !== pick) {
+      const p = route(pos, pick), dur = travel(p.len, now, o.a);
+      d.segs.push({ k: 'dh', t0: now, t1: now + dur, path: p, o }); now += dur; lastPath = p;
+    } else lastPath = null;
+    if (o.c) {
+      const cs = Math.max(o.c, now);
+      if (cs > now) d.segs.push({ k: 'atpick', t0: now, t1: cs, loc: pick, path: lastPath, o });
+      const p = route(pick, drop), dur = travel(p.len, cs, o.c);
+      o.vc = cs;
+      d.segs.push({ k: 'carry', t0: cs, t1: cs + dur, path: p, o }); now = cs + dur;
+      o.vd = Math.max(now, o.d || now);
+      if (o.vd > now) d.segs.push({ k: 'atdrop', t0: now, t1: o.vd, loc: drop, path: p, o });
+      now = o.vd; pos = drop;
+    } else {
+      const e = Math.max(o.x || now, now);
+      if (e > now) d.segs.push({ k: 'atpick', t0: now, t1: e, loc: pick, path: lastPath, o });
+      o.vc = e; now = e; pos = pick;
+    }
+    d.segs.push({ k: 'idle', t0: now, t1: now, loc: pos, o });
+    t = now;
+  }
+});
+
+const OFF_AFTER = 75 * 60, ON_BEFORE = 20 * 60;
+function driverState(d, T) {
+  const s = d.segs;
+  let i = -1;
+  for (let j = 0; j < s.length; j++) { if (s[j].t0 <= T) i = j; else break; }
+  const next = s.find(x => x.t0 > T && x.k !== 'idle');
+  if (i < 0) return next && next.t0 - T < ON_BEFORE ? { k: 'idle', loc: next.o.from, o: null } : { k: 'off' };
+  const seg = s[i];
+  if (seg.k !== 'idle' && T <= seg.t1) return seg;
+  const idleFor = T - seg.t1;
+  if (idleFor > OFF_AFTER && !(next && next.t0 - T < ON_BEFORE)) return { k: 'off', loc: seg.loc };
+  return { k: 'idle', loc: seg.loc || seg.o.to, o: seg.o };
+}
+function statusOf(st) {
+  switch (st.k) {
+    case 'dh': return { text: 'To pickup', color: C.pickup };
+    case 'atpick': return { text: 'Loading', color: C.pickup };
+    case 'carry': return st.o.full ? { text: 'Full run', color: C.full } : { text: 'Empty run', color: C.empty };
+    case 'atdrop': return { text: 'Unloading', color: st.o.full ? C.full : C.empty };
+    case 'idle': return { text: 'Idle', color: C.idle };
+    default: return { text: 'Off shift', color: '#4a525d' };
+  }
+}
+
+// ---------- time range ----------
+let tMin = Infinity, tMax = -Infinity;
+D.tasks.forEach(t => t.ev.forEach(e => { tMin = Math.min(tMin, e[0]); tMax = Math.max(tMax, e[0]); }));
+tMin = Math.floor(tMin / 3600) * 3600; tMax = Math.ceil(tMax / 3600) * 3600;
+const nBins = Math.round((tMax - tMin) / 3600);
+const bins = Array.from({ length: nBins }, () => [0, 0]);
+D.tasks.forEach(t => { if (t.del) bins[Math.min(nBins - 1, Math.floor((t.del - tMin) / 3600))][t.full ? 0 : 1]++; });
+let busiest = 0; bins.forEach((b, i) => { if (b[0] + b[1] > bins[busiest][0] + bins[busiest][1]) busiest = i; });
+
+// ---------- log events ----------
+const log = [];
+orders.forEach(o => {
+  const drv = drvById[o.driver]?.tag || '—';
+  const what = [o.nFull && `${o.nFull} full`, o.nEmpty && `${o.nEmpty} empty`].filter(Boolean).join(' + ') + ' ULD';
+  const fl = o.flight ? ` · ${o.flight.no}` : '';
+  const route = `${o.from.label} → ${o.to.label}`;
+  const push = (t, verb, color, who) => t && log.push({ t, html: `<span class="v" style="color:${color}">${who} ${verb}</span> ${what} · ${route}${fl}` });
+  push(o.ready, `#${o.no ?? '?'} created`, C.muted, '');
+  push(o.a, 'accepted', C.pickup, drv);
+  push(o.c, 'collected', o.full ? C.full : C.empty, drv);
+  push(o.d, 'delivered', o.full ? C.full : C.empty, drv);
+  push(o.x, 'cancelled', C.alert, '');
+});
+log.sort((a, b) => a.t - b.t);
+const dispatchTimes = [...new Set([...orders.values()].map(o => o.a).filter(Boolean))].sort((a, b) => a - b);
+
+// ---------- static background ----------
+const cv = document.getElementById('apron'), ctx = cv.getContext('2d');
+cv.width = W; cv.height = H;
+const bg = document.createElement('canvas'); bg.width = W; bg.height = H;
+const standsAt = new Map();
+function drawBackground() {
+  const g = bg.getContext('2d');
+  g.fillStyle = C.tarmac; g.fillRect(0, 0, W, H);
+  // concrete slab joints + speckle
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 2600; i++) { g.fillStyle = rnd() > .5 ? C.tarmac2 : '#1f242a'; g.fillRect(rnd() * W | 0, rnd() * H | 0, 1, 1); }
+  g.fillStyle = '#1e2329';
+  for (let x = 0; x < W; x += 32) g.fillRect(x, ROAD.r1 + 7, 1, H);
+  for (let y = ROAD.r1 + 40; y < H; y += 32) g.fillRect(0, y, W, 1);
+  // roads
+  g.fillStyle = C.road;
+  g.fillRect(0, ROAD.r1 - 7, W, 14); g.fillRect(0, ROAD.r2 - 7, W, 14);
+  CONNECT.forEach(x => g.fillRect(x - 5, ROAD.r1 - 7, 10, ROAD.r2 - ROAD.r1 + 14));
+  g.fillStyle = '#e8e3d6';
+  for (let x = 12; x < W - 10; x += 10) { g.fillRect(x, ROAD.r1, 5, 1); g.fillRect(x, ROAD.r2, 5, 1); }
+  g.fillStyle = C.paint;
+  [ROAD.r1, ROAD.r2].forEach(y => { g.fillRect(0, y - 8, W, 1); g.fillRect(0, y + 7, W, 1); });
+  // stands: lead-in line, stop bar, box, painted number
+  g.font = '8px Silkscreen, monospace'; g.textBaseline = 'top'; g.textAlign = 'center';
+  stands.forEach(l => {
+    const top = l.dy, bottom = l.road === 'r1' ? ROAD.r2 - 12 : H - 3;
+    g.fillStyle = 'rgba(242,194,48,.28)';
+    g.fillRect(l.x - sp / 2 + 3, top + 2, 1, bottom - top - 2); g.fillRect(l.x + sp / 2 - 3, top + 2, 1, bottom - top - 2);
+    g.fillStyle = C.paint;
+    g.fillRect(l.x, top + 2, 1, bottom - top - 14);
+    g.fillRect(l.x - 4, top + 8, 9, 1);
+    g.fillStyle = 'rgba(242,194,48,.75)';
+    g.fillText(l.name, l.x, bottom - 9);
+  });
+  // baggage hall building
+  g.fillStyle = '#0c0f13'; g.fillRect(8, 6, W - 16, 92);
+  g.fillStyle = C.hall; g.fillRect(10, 4, W - 20, 90);
+  g.fillStyle = C.hallRoof;
+  for (let x = 12; x < W - 12; x += 6) g.fillRect(x, 6, 3, 2);
+  g.fillStyle = C.wall; g.fillRect(10, 92, W - 20, 3);
+  g.fillStyle = '#c9c3b4'; g.textAlign = 'left';
+  g.fillText('T1 BAGGAGE HALL', 16, 10);
+  g.textAlign = 'center';
+  hall.forEach(l => {
+    // door in wall
+    g.fillStyle = C.road; g.fillRect(l.x - 7, 91, 14, 5);
+    g.fillStyle = C.paint; g.fillRect(l.x - 8, 91, 1, 5); g.fillRect(l.x + 7, 91, 1, 5);
+    if (l.type === 'Chute') {
+      // make-up carousel / lateral
+      g.fillStyle = C.belt; g.fillRect(l.x - 18, 22, 36, 9);
+      g.fillStyle = '#5d574e'; for (let x = l.x - 17; x < l.x + 17; x += 3) g.fillRect(x, 24, 2, 5);
+      g.fillStyle = '#222'; g.fillRect(l.x - 2, 31, 4, 4);
+    } else {
+      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(l.x - 38, 20, 76, 70);
+      g.fillStyle = 'rgba(242,194,48,.5)'; g.fillRect(l.x - 38, 20, 76, 1); g.fillRect(l.x - 38, 89, 76, 1);
+    }
+    g.fillStyle = l.type === 'Chute' ? '#d8d2c2' : C.paint;
+    g.fillText(l.label, l.x, l.type === 'Chute' ? 37 : 23);
+  });
+}
+
+// ---------- sprites ----------
+function drawULD(x, y, full, alpha = 1) {
+  x = Math.round(x); y = Math.round(y);
+  ctx.globalAlpha = alpha;
+  if (full) {
+    ctx.fillStyle = C.full; ctx.fillRect(x, y, 6, 6);
+    ctx.fillStyle = '#b86f00'; ctx.fillRect(x, y + 4, 6, 2); ctx.fillRect(x + 2, y + 1, 1, 3);
+    ctx.fillStyle = '#ffe2a8'; ctx.fillRect(x, y, 5, 1);
+  } else {
+    ctx.fillStyle = C.empty; ctx.fillRect(x, y, 6, 6);
+    ctx.fillStyle = '#0f2322'; ctx.fillRect(x + 1, y + 1, 4, 4);
+  }
+  ctx.fillStyle = '#0a0c0f'; ctx.fillRect(x + 5, y, 1, 1);   // contoured corner (AKE)
+  ctx.globalAlpha = 1;
+}
+function drawTug(x, y, dx, dy, color, sel) {
+  x = Math.round(x); y = Math.round(y);
+  const horiz = dx !== 0 || dy === 0;
+  const w = horiz ? 8 : 5, h = horiz ? 5 : 8;
+  if (sel) { ctx.strokeStyle = C.paint; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2 - 2.5, y - h / 2 - 2.5, w + 5, h + 5); }
+  ctx.fillStyle = '#0a0c0f'; ctx.fillRect(x - w / 2 + 1, y - h / 2 + 1, w, h);
+  ctx.fillStyle = color; ctx.fillRect(x - w / 2, y - h / 2, w, h);
+  ctx.fillStyle = '#11151a';                     // cab window toward direction of travel
+  if (horiz) ctx.fillRect(dx < 0 ? x - 3 : x + 1, y - 2, 2, 3);
+  else ctx.fillRect(x - 1, dy < 0 ? y - 3 : y + 1, 3, 2);
+  ctx.fillStyle = '#fff6c9'; ctx.fillRect(x - w / 2 + (dx > 0 ? w - 1 : 0), y - h / 2, 1, 1);
+}
+function drawPlane(x, y, f) {
+  const tail = TAIL[(f.no || '').slice(0, 2)] || C.alert;
+  const r = (c, a, b, w, h) => { ctx.fillStyle = c; ctx.fillRect(x + a, y + b, w, h); };
+  r('rgba(0,0,0,.35)', -13, 14, 29, 5);                // shadow
+  r(C.planeShade, -14, 12, 29, 4); r(C.plane, -12, 11, 25, 4);   // wings
+  r(C.planeShade, -9, 15, 3, 4); r(C.planeShade, 7, 15, 3, 4);     // engines
+  r(C.plane, -2, 0, 5, 36); r(C.planeShade, 2, 2, 1, 33);          // fuselage
+  r('#1b222c', -1, 2, 3, 1);                                       // cockpit
+  r(C.plane, -1, -1, 3, 1);
+  r(C.planeShade, -6, 31, 13, 3); r(tail, 0, 27, 1, 9);            // tailplane + fin
+}
+
+// ---------- state at time T ----------
+function slotHall(l, i) { // grid inside the hall above the door
+  const cols = l.type === 'Chute' ? 5 : 9, c = i % cols, r = Math.floor(i / cols);
+  return [l.x - cols * 3.5 + c * 7 + .5, 84 - r * 7];
+}
+function slotStand(l, i) { return [l.x + 16 + (i >= 7 ? 7 : 0), l.dy + 12 + (i % 7) * 7]; }
+
+let selected = null;
+function frame(T) {
+  ctx.drawImage(bg, 0, 0);
+  // planes on stand
+  ctx.font = '8px Silkscreen, monospace'; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
+  const planeAt = new Map();
+  D.flights.forEach(f => {
+    const l = byId[f.stand]; if (!l || l.x == null || l.hall) return;
+    const out = f.etd || f.std; if (!out) return;
+    const inn = f.sta || out - 150 * 60;
+    if (T >= inn && T <= out + 5 * 60) planeAt.set(l.id, f);
+  });
+  planeAt.forEach((f, id) => {
+    const l = byId[id]; drawPlane(l.x - 1, l.dy + 14, f);
+    ctx.fillStyle = C.ink; ctx.fillText(f.no, l.x, l.dy + 52);
+    const left = Math.round(((f.etd || f.std) - T) / 60);
+    ctx.fillStyle = left < 20 ? C.alert : C.muted;
+    ctx.fillText(left >= 0 ? `STD ${left}M` : 'PUSH', l.x, l.dy + 61);
+  });
+
+  // ULD piles (waiting at pickup, dropped at destination)
+  const piles = new Map();
+  const add = (l, t, a = 1) => { if (!piles.has(l.id)) piles.set(l.id, []); piles.get(l.id).push([t, a]); };
+  let waiting = 0;
+  D.tasks.forEach(t => {
+    const o = t.o, from = byId[t.from], to = byId[t.to];
+    const gone = o.vc ?? t.can ?? Infinity;
+    if (T >= t.ready && T < gone && !(t.can && T >= t.can)) { add(from, t); waiting++; }
+    if (t.del && o.vd != null) {
+      const arrive = Math.max(o.vd, t.del);
+      let leave = arrive + 25 * 60;
+      if (!to.hall) { const f = planeAt.get(to.id) || flights[t.flight]; const out = f && (f.etd || f.std); leave = out && out > arrive ? out : arrive + 45 * 60; }
+      if (T >= arrive && T < leave) add(to, t, to.hall ? .85 : 1);
+    }
+  });
+  piles.forEach((list, id) => {
+    const l = byId[id], hallLoc = l.hall;
+    const max = hallLoc ? (l.type === 'Chute' ? 20 : 45) : 14;
+    list.slice(0, max).forEach(([t, a], i) => {
+      const [x, y] = hallLoc ? slotHall(l, i) : slotStand(l, i);
+      drawULD(x, y, t.full, a);
+      if (t.urgent) { ctx.fillStyle = C.alert; ctx.fillRect(Math.round(x) + 2, Math.round(y) - 2, 2, 1); }
+    });
+    if (list.length > max) {
+      ctx.fillStyle = C.ink; ctx.textAlign = 'left';
+      const [x, y] = hallLoc ? slotHall(l, max - 1) : slotStand(l, max - 1);
+      ctx.fillText('+' + (list.length - max), x + 8, y - 1); ctx.textAlign = 'center';
+    }
+  });
+
+  // tugs with dolly trains
+  const states = drivers.map(d => ({ d, st: driverState(d, T) }));
+  const parked = new Map();
+  states.forEach(({ d, st }) => {
+    if (st.k === 'off') return;
+    const stc = statusOf(st);
+    let p, path = st.path, s;
+    if (st.k === 'dh' || st.k === 'carry') {
+      s = (T - st.t0) / Math.max(1, st.t1 - st.t0) * path.len;
+      p = pointAt(path, s);
+    } else {
+      const l = st.loc || st.o?.from; if (!l) return;
+      const n = parked.get(l.id) || 0; parked.set(l.id, n + 1);
+      if (path && n === 0) { s = path.len; p = pointAt(path, s); }
+      else { p = { x: l.x + (n % 2 ? 1 : -1) * (6 + 9 * Math.floor(n / 2)) + (n ? 0 : 0), y: l.hall ? l.dy + 5 : l.dy + 1, dx: 1, dy: 0 }; path = null; }
+    }
+    const loaded = st.k === 'carry' || st.k === 'atdrop';
+    if (loaded) {
+      const ts = st.o.tasks.slice(0, 6);
+      ts.forEach((t, k) => {
+        const q = path ? pointAt(path, s - 8 - k * 7) : { x: p.x + 7 + k * 7, y: p.y };
+        drawULD(q.x - 3, q.y - 3, t.full);
+      });
+    }
+    drawTug(p.x, p.y, p.dx, p.dy, stc.color, selected === d.id);
+    ctx.fillStyle = selected === d.id ? C.paint : stc.color;
+    ctx.fillText(d.tag, Math.round(p.x), Math.round(p.y) - 12);
+    d._p = p;
+  });
+  return { states, waiting };
+}
+
+// ---------- panels ----------
+const $ = id => document.getElementById(id);
+const fmtT = t => new Date(t * 1000).toISOString().slice(11, 16);
+const fmtD = t => new Date(t * 1000).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
+const dayStart = t => Math.floor(t / 86400) * 86400;
+
+const roster = $('roster');
+drivers.forEach(d => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'drv'; b.id = 'drv-' + d.tag;
+  b.innerHTML = `<span class="tag"></span><span class="co"></span><span class="pill"></span><span class="job"></span>`;
+  b.querySelector('.tag').textContent = d.tag;
+  b.addEventListener('click', () => { selected = selected === d.id ? null : d.id; render(true); });
+  roster.append(b); d.el = b;
+});
+function renderPanels(T, res) {
+  $('clockT').textContent = fmtT(T);
+  $('clockD').textContent = fmtD(T) + ' UTC';
+  const d0 = dayStart(T);
+  let full = 0, empty = 0, runs = 0;
+  D.tasks.forEach(t => { if (t.del && t.del >= d0 && t.del <= T) t.full ? full++ : empty++; });
+  orders.forEach(o => { if (o.d && o.d >= d0 && o.d <= T) runs++; });
+  const on = res.states.filter(s => s.st.k !== 'off').length;
+  const moving = res.states.filter(s => s.st.k === 'carry' || s.st.k === 'dh').length;
+  $('stats').innerHTML = [
+    ['Full ULDs delivered today', full, C.full],
+    ['Empty ULDs delivered today', empty, C.empty],
+    ['Runs completed today', runs, C.ink],
+    ['ULDs waiting for a tug', res.waiting, res.waiting > 12 ? C.alert : C.ink],
+    ['Tugs moving / on shift', `${moving}/${on}`, C.ink],
+  ].map(([l, v, c]) => `<div class="stat"><span class="label">${l}</span><b style="color:${c}">${v}</b></div>`).join('');
+  $('onShift').textContent = `${on} on shift`;
+  res.states.forEach(({ d, st }) => {
+    const s = statusOf(st), el = d.el;
+    el.classList.toggle('off', st.k === 'off');
+    el.classList.toggle('sel', selected === d.id);
+    el.querySelector('.co').textContent = d.company || '';
+    const pill = el.querySelector('.pill'); pill.textContent = s.text; pill.style.background = s.color;
+    const done = d.orders.filter(o => o.d && o.d >= d0 && o.d <= T).length;
+    let job;
+    if (st.o && st.k !== 'idle' && st.k !== 'off') {
+      const o = st.o;
+      const n = [o.nFull && `${o.nFull} full`, o.nEmpty && `${o.nEmpty} empty`].filter(Boolean).join('+');
+      job = `<em>#${o.no ?? '?'}</em> ${n} · ${o.from.label} → ${o.to.label}${o.flight ? ' · ' + o.flight.no : ''}`;
+    } else if (st.k === 'idle') job = `at ${(st.loc || st.o?.to)?.label ?? '—'} · ${done} runs today`;
+    else job = `${done} runs today`;
+    el.querySelector('.job').innerHTML = job;
+  });
+  // ticker
+  let hi = log.length; while (hi > 0 && log[hi - 1].t > T) hi--;
+  $('ticker').innerHTML = log.slice(Math.max(0, hi - 14), hi).reverse()
+    .map(e => `<li><time>${fmtT(e.t)}</time><span>${e.html}</span></li>`).join('') || '<li><time></time><span>No orders yet.</span></li>';
+}
+
+// ---------- timeline strip ----------
+const tl = $('tl'), tctx = tl.getContext('2d');
+let tlW = 0, tlH = 0, dpr = 1;
+function sizeTL() { dpr = window.devicePixelRatio || 1; tlW = tl.clientWidth; tlH = tl.clientHeight; tl.width = tlW * dpr; tl.height = tlH * dpr; }
+const maxBin = Math.max(...bins.map(b => b[0] + b[1]));
+function drawTL(T) {
+  const g = tctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, tlW, tlH);
+  const top = 14, base = tlH - 4, bw = tlW / nBins;
+  g.fillStyle = '#20262e';
+  for (let i = 0; i < nBins; i++) g.fillRect(i * bw, base - 1, Math.max(1, bw - 1), 1);
+  bins.forEach((b, i) => {
+    const hF = b[0] / maxBin * (base - top), hE = b[1] / maxBin * (base - top);
+    g.fillStyle = C.full; g.fillRect(i * bw, base - hF, Math.max(1, bw - 1), hF);
+    g.fillStyle = C.empty; g.fillRect(i * bw, base - hF - hE, Math.max(1, bw - 1), hE);
+  });
+  g.font = '10px "IBM Plex Mono", monospace'; g.textBaseline = 'top';
+  for (let t = dayStart(tMin) + 86400; t < tMax; t += 86400) {
+    const x = (t - tMin) / 3600 * bw;
+    g.fillStyle = '#3a434f'; g.fillRect(x, 0, 1, tlH);
+  }
+  for (let t = dayStart(tMin); t < tMax; t += 86400) {
+    const x = Math.max(0, (t - tMin) / 3600 * bw) + 4;
+    g.fillStyle = C.muted; g.fillText(fmtD(Math.max(t, tMin)).toUpperCase(), x, 1);
+  }
+  const x = (T - tMin) / (tMax - tMin) * tlW;
+  g.fillStyle = C.paint; g.fillRect(x - 1, 0, 2, tlH);
+  g.beginPath(); g.moveTo(x - 5, 0); g.lineTo(x + 5, 0); g.lineTo(x, 6); g.fill();
+}
+function tFromX(ev) { const r = tl.getBoundingClientRect(); return tMin + Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * (tMax - tMin); }
+let dragging = false;
+tl.addEventListener('pointerdown', e => { dragging = true; tl.setPointerCapture(e.pointerId); T = tFromX(e); render(true); });
+tl.addEventListener('pointermove', e => { if (dragging) { T = tFromX(e); render(true); } });
+tl.addEventListener('pointerup', () => dragging = false);
+
+// day jump buttons
+for (let t = dayStart(tMin); t < tMax; t += 86400) {
+  const b = document.createElement('button'); b.type = 'button';
+  b.textContent = fmtD(t);
+  const start = Math.max(t + 5 * 3600, tMin);
+  b.addEventListener('click', () => { T = start; render(true); });
+  $('days').append(b);
+}
+
+// click a tug on the map to select its driver
+cv.addEventListener('click', e => {
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+  let best = null, bd = 12;
+  drivers.forEach(d => { if (!d._p || d._hidden) return; const dd = Math.hypot(d._p.x - x, d._p.y - y); if (dd < bd) { bd = dd; best = d.id; } });
+  selected = best; render(true);
+});
+
+// ---------- loop ----------
+let T = tMin + busiest * 3600 - 40 * 60;
+let playing = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let speed = 60, lastNow = performance.now(), lastPanel = 0;
+const playBtn = $('play');
+const syncPlay = () => playBtn.textContent = playing ? 'Pause' : 'Play';
+playBtn.addEventListener('click', () => { playing = !playing; syncPlay(); });
+$('speed').addEventListener('change', e => speed = +e.target.value);
+$('skip').addEventListener('click', () => { const n = dispatchTimes.find(t => t > T + 5); if (n) { T = n - 20; render(true); } });
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playing = !playing; syncPlay(); } });
+syncPlay();
+
+function render(force) {
+  drivers.forEach(d => d._p = null);
+  const res = frame(T);
+  const now = performance.now();
+  if (force || now - lastPanel > 250) { renderPanels(T, res); lastPanel = now; }
+  drawTL(T);
+}
+function tick(now) {
+  const dt = Math.min(0.1, (now - lastNow) / 1000); lastNow = now;
+  if (playing && !dragging) { T += dt * speed; if (T > tMax) T = tMin; }
+  render(false);
+  requestAnimationFrame(tick);
+}
+window.addEventListener('resize', () => { sizeTL(); render(true); });
+
+(document.fonts ? document.fonts.load('8px Silkscreen, monospace').catch(() => {}) : Promise.resolve()).then(() => {
+  drawBackground(); sizeTL(); render(true); requestAnimationFrame(tick);
+});
+})();
+</script>
+</body>
+</html>
