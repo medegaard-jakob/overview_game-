@@ -64,6 +64,11 @@ for fn in ('Logs-flightCreated.json', 'Logs-flightUpdated.json'):
             if not cur[k] and fl.get(src):
                 cur[k] = ts_iso(fl[src])
 
+# Test flights set up by the system vendor, not real operations
+test_flights = {i for i, f in flights.items() if 'beumer' in (f['no'] or '').lower()}
+for i in test_flights:
+    del flights[i]
+
 STATUS = {'READY': 'ready', 'AWAITING_START_TIME': 'waiting', 'AWAITING_DEPENDENCY': 'waiting',
           'ACCEPTED': 'accepted', 'COLLECTED': 'collected', 'DELIVERED': 'delivered', 'CANCELLED': 'cancelled'}
 
@@ -132,7 +137,7 @@ for ct in rows('CargoTasks.csv'):
 out_tasks = []
 used_locs, used_users, used_flights = set(), set(), set()
 for t in tasks.values():
-    if t['from'] not in locations or t['to'] not in locations:
+    if t['from'] not in locations or t['to'] not in locations or t.get('flight') in test_flights:
         continue
     ev = sorted(t['events'], key=lambda e: e[0])
     # collapse consecutive duplicates
