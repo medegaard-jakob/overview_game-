@@ -6,7 +6,7 @@
 <title>Baggage Apron Replay</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap">
 <style>
 /* Layout: control-room screen. Pixel apron (canvas) is the hero, driver roster to the right,
    hourly throughput strip underneath doubles as the time scrubber.
@@ -25,6 +25,7 @@
   --alert: #ff6b5e;
   --f-display: "Pixelify Sans", "Nunito", system-ui, sans-serif;
   --f-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;   /* numbers: distinct 3/8, 0/O */
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -42,7 +43,7 @@ header { display: flex; flex-wrap: wrap; align-items: end; justify-content: spac
 h1 { font: 700 22px/1 var(--f-display); letter-spacing: .02em; margin: 0; text-wrap: balance; }
 h1 small { display: block; font: 400 12px/1.4 var(--f-body); color: var(--muted); margin-top: 6px; letter-spacing: 0; }
 .clock { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; }
-.clock .t { font: 700 30px/1 var(--f-display); color: var(--paint); }
+.clock .t { font: 800 30px/1 var(--f-num); color: var(--paint); }
 .clock .d { font: 400 13px var(--f-display); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 button, select {
@@ -73,7 +74,7 @@ button[aria-pressed="true"] { border-color: var(--paint); color: var(--paint); }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .stat { background: var(--panel); padding: 8px 12px; display: grid; gap: 2px; }
-.stat b { font: 700 20px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+.stat b { font: 800 20px/1.1 var(--f-num); font-variant-numeric: tabular-nums; }
 
 aside { display: grid; gap: 14px; min-width: 0; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; min-width: 0; }
@@ -86,7 +87,7 @@ aside { display: grid; gap: 14px; min-width: 0; }
 }
 .drv:hover { background: #1f252e; }
 .drv.sel { border-color: var(--paint); background: #1f252e; }
-.drv .tag { font: 700 12px var(--f-display); grid-row: span 2; }
+.drv .tag { font: 800 12.5px var(--f-num); grid-row: span 2; }
 .drv .co { color: var(--muted); font-size: 11px; }
 .drv .job { grid-column: 2 / 4; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drv .job em { font-style: normal; color: var(--ink); }
@@ -99,12 +100,13 @@ aside { display: grid; gap: 14px; min-width: 0; }
 .chip .late { color: var(--alert); font-weight: 800; }
 .daygrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
 .ds { display: grid; gap: 3px; min-width: 0; }
-.ds b { font: 700 24px/1 var(--f-display); }
+.ds b { font: 800 24px/1 var(--f-num); }
 .ds small { color: var(--muted); font-size: 11.5px; }
 .bar { height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; border-radius: 99px; }
 .flchips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip { font-size: 11.5px; padding: 1px 8px; border-radius: 99px; background: #232d3d; white-space: nowrap; }
+.chip { font-family: var(--f-num); font-size: 11px; }
 .chip b { font-weight: 800; }
 .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 11.5px; }
 .legend div { display: flex; gap: 7px; align-items: center; }
@@ -464,6 +466,7 @@ const cv = document.getElementById('apron'), ctx = cv.getContext('2d');
 cv.width = W * 2; cv.height = H * 2;
 const bg = document.createElement('canvas');
 let S = 0;
+const NUMF = (n, w = 700) => `${w} ${n}px "JetBrains Mono", ui-monospace, Menlo, monospace`;   // anything with digits
 const FONT = (n, w = 500) => `${w} ${n}px "Pixelify Sans", "Nunito", system-ui, sans-serif`;
 function rr(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
 let bgDirty = true, layoutKey = null;
@@ -519,7 +522,7 @@ function drawBackground() {
     g.strokeStyle = 'rgba(242,194,48,.85)'; g.lineWidth = .8;
     g.beginPath(); g.moveTo(l.x, top + 4); g.lineTo(l.x, top + 50); g.stroke();   // stops above the flight labels
     rr(g, l.x - 4.5, top + 7.5, 9, 1.3, .65); g.fillStyle = C.paint; g.fill();
-    g.font = FONT(7); g.fillStyle = 'rgba(242,194,48,.75)'; g.fillText(l.name, l.x, bottom - 10);
+    g.font = NUMF(7); g.fillStyle = 'rgba(242,194,48,.8)'; g.fillText(l.name, l.x, bottom - 10);
   });
   // floodlight pools
   g.globalCompositeOperation = 'lighter';
@@ -552,7 +555,7 @@ function drawBackground() {
     g.fillStyle = C.paint; g.fillRect(l.x - 7.6, 89.5, .7, 7); g.fillRect(l.x + 6.9, 89.5, .7, 7);
     if (l.type === 'Chute') {
       // bank name sign
-      g.font = FONT(12, 700);
+      g.font = NUMF(11, 800);
       const w = Math.min(66, g.measureText(l.label).width + 14);
       rr(g, l.x - w / 2, 20, w, 18, 4); g.fillStyle = '#1b2029'; g.fill();
       g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = .7; g.stroke();
@@ -646,7 +649,7 @@ function drawPlane(x, y, f) {
   rr(ctx, x - .8, y + 26.5, 1.6, 9.5, .8); ctx.fillStyle = tail; ctx.fill();                   // fin
 }
 function pill(text, x, y, bgc, fg, size = 6.5) {
-  ctx.font = FONT(size, 600);
+  ctx.font = NUMF(size, 700);
   const w = ctx.measureText(text).width + 4;
   rr(ctx, x - w / 2, y - .5, w, size + 2.2, 2.2); ctx.fillStyle = bgc; ctx.fill();
   ctx.fillStyle = fg; ctx.fillText(text, x, y + .6);
@@ -681,7 +684,7 @@ function frame(T) {
     const l = byId[id]; drawPlane(l.x, l.dy + 14, f);
     pill(f.no, l.x, l.dy + 53, 'rgba(12,15,20,.78)', C.ink);
     const left = Math.round(((f.etd || f.std) - T) / 60);
-    ctx.font = FONT(6); ctx.fillStyle = left < 20 ? C.alert : C.muted;
+    ctx.font = NUMF(5.5, 600); ctx.fillStyle = left < 20 ? C.alert : C.muted;
     const late = D.tasks.filter(t => t.flight === f.id && t.del && t.del <= T && isLate(t) && inOrg(t.company)).length;
     const label = left >= 0 ? `STD ${left}m` : 'PUSHBACK';
     if (late) {
@@ -1008,7 +1011,7 @@ function tick(now) {
 }
 window.addEventListener('resize', () => { sizeTL(); render(true); });
 
-(document.fonts ? Promise.all([document.fonts.load('600 8px "Pixelify Sans"'), document.fonts.load('600 10px Nunito')]).catch(() => {}) : Promise.resolve()).then(() => {
+(document.fonts ? Promise.all([document.fonts.load('600 8px "Pixelify Sans"'), document.fonts.load('600 10px Nunito'), document.fonts.load('700 10px "JetBrains Mono"')]).catch(() => {}) : Promise.resolve()).then(() => {
   S = 0; sizeTL(); render(true); requestAnimationFrame(tick);
 });
 })();
