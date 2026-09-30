@@ -221,16 +221,23 @@ hall.forEach(l => { l.dy = 96; l.road = 'r1'; l.hall = true; });
 hall.filter(l => l.type === 'EmptyStorage').forEach(l => l.x = 52);
 hall.filter(l => l.type === 'EarlyStorage').forEach(l => l.x = W - 52);
 chutes.forEach((l, i) => l.x = Math.round(chutes.length === 1 ? W / 2 : 140 + i * (360 / (chutes.length - 1))));
-const stands = D.locations.filter(l => l.type === 'FlightStand')
+const allStands = D.locations.filter(l => l.type === 'FlightStand')
   .sort((a, b) => parseInt(a.name) - parseInt(b.name) || a.name.localeCompare(b.name));
-const perRow = Math.ceil(stands.length / 2);
-const sp = Math.min(50, (W - 60) / perRow);
-stands.forEach((l, i) => {
-  const row = i < perRow ? 0 : 1, k = row ? i - perRow : i;
-  l.x = Math.round(34 + sp / 2 + k * sp);
-  l.dy = row ? ROAD.r2 + 8 : ROAD.r1 + 8;
-  l.road = row ? 'r2' : 'r1';
-});
+let stands = allStands, sp = 50;
+// Lay out the given stands in two rows; stands not in the list get no position (not drawn).
+function layoutStands(list) {
+  allStands.forEach(l => { l.x = null; });
+  stands = list;
+  const perRow = list.length <= 12 ? Math.max(1, list.length) : Math.ceil(list.length / 2);   // one row until it's full
+  sp = Math.min(50, (W - 60) / perRow);
+  list.forEach((l, i) => {
+    const row = i < perRow ? 0 : 1, k = row ? i - perRow : i;
+    l.x = Math.round(34 + sp / 2 + k * sp);
+    l.dy = row ? ROAD.r2 + 8 : ROAD.r1 + 8;
+    l.road = row ? 'r2' : 'r1';
+  });
+  routeCache.clear();
+}
 D.locations.forEach(l => l.label = shortName(l));
 
 // ---------- paths ----------
@@ -262,6 +269,8 @@ function route(a, b) {
   pts.push([b.x, b.dy]);
   const p = mkPath(pts); routeCache.set(key, p); return p;
 }
+// Tug timings are worked out once on the full stand layout, so they don't change with the day shown.
+layoutStands(allStands);
 
 // ---------- orders & driver timelines ----------
 const firstT = (t, st) => { const e = t.ev.find(e => e[1] === st); return e ? e[0] : null; };
@@ -311,26 +320,26 @@ function travel(len, start, actual) {
 }
 drivers.forEach(d => {
   d.orders.sort((a, b) => a.a - b.a);
-  let pos = null, t = -Infinity, lastPath = null;
+  let pos = null, t = -Infinity, last = null;
   for (const o of d.orders) {
     const pick = o.from, drop = o.to;
     let now = Math.max(o.a, t);
     if (pos && pos !== pick) {
       const p = route(pos, pick), dur = travel(p.len, now, o.a);
-      d.segs.push({ k: 'dh', t0: now, t1: now + dur, path: p, o }); now += dur; lastPath = p;
-    } else lastPath = null;
+      d.segs.push({ k: 'dh', t0: now, t1: now + dur, ra: pos, rb: pick, o }); now += dur; last = [pos, pick];
+    } else last = null;
     if (o.c) {
       const cs = Math.max(o.c, now);
-      if (cs > now) d.segs.push({ k: 'atpick', t0: now, t1: cs, loc: pick, path: lastPath, o });
+      if (cs > now) d.segs.push({ k: 'atpick', t0: now, t1: cs, loc: pick, ra: last?.[0], rb: last?.[1], o });
       const p = route(pick, drop), dur = travel(p.len, cs, o.c);
       o.vc = cs;
-      d.segs.push({ k: 'carry', t0: cs, t1: cs + dur, path: p, o }); now = cs + dur;
+      d.segs.push({ k: 'carry', t0: cs, t1: cs + dur, ra: pick, rb: drop, o }); now = cs + dur;
       o.vd = Math.max(now, o.d || now);
-      if (o.vd > now) d.segs.push({ k: 'atdrop', t0: now, t1: o.vd, loc: drop, path: p, o });
+      if (o.vd > now) d.segs.push({ k: 'atdrop', t0: now, t1: o.vd, loc: drop, ra: pick, rb: drop, o });
       now = o.vd; pos = drop;
     } else {
       const e = Math.max(o.x || now, now);
-      if (e > now) d.segs.push({ k: 'atpick', t0: now, t1: e, loc: pick, path: lastPath, o });
+      if (e > now) d.segs.push({ k: 'atpick', t0: now, t1: e, loc: pick, ra: last?.[0], rb: last?.[1], o });
       o.vc = e; now = e; pos = pick;
     }
     d.segs.push({ k: 'idle', t0: now, t1: now, loc: pos, o });
@@ -399,12 +408,30 @@ const bg = document.createElement('canvas');
 let S = 0;
 const FONT = (n, w = 500) => `${w} ${n}px "Pixelify Sans", "Nunito", system-ui, sans-serif`;
 function rr(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
+let bgDirty = true, layoutKey = null;
 function sizeApron() {
   const w = cv.clientWidth || W;
   const s = Math.max(2, Math.min(4, Math.ceil(w * (window.devicePixelRatio || 1) / W)));
-  if (s === S) return;
-  S = s; cv.width = bg.width = W * S; cv.height = bg.height = H * S;
-  drawBackground();
+  if (s !== S) { S = s; cv.width = bg.width = W * S; cv.height = bg.height = H * S; bgDirty = true; }
+  if (bgDirty) { bgDirty = false; drawBackground(); }
+}
+// Stands relevant to the shown day and organisation: used by a ULD task that is active that day
+// (including ULDs still waiting at the stand), or holding a plane that day.
+function relevantStands(d0) {
+  const d1 = d0 + 86400, keep = new Set();
+  D.tasks.forEach(t => {
+    if (!inOrg(t.company)) return;
+    const from = t.ready, to = (t.del || t.ev[t.ev.length - 1][0]) + 3 * 3600;
+    if (to < d0 || from >= d1) return;
+    [t.from, t.to].forEach(id => { if (byId[id]?.type === 'FlightStand') keep.add(id); });
+  });
+  D.flights.forEach(f => {
+    const out = f.etd || f.std;
+    if (!out || byId[f.stand]?.type !== 'FlightStand') return;
+    if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
+    if (out + 300 >= d0 && (f.sta || out - 150 * 60) < d1) keep.add(f.stand);
+  });
+  return allStands.filter(l => keep.has(l.id));
 }
 function glow(g, x, y, r, rgb, a) {
   const gr = g.createRadialGradient(x, y, 0, x, y, r);
@@ -564,6 +591,8 @@ function slotStand(l, i) { return [l.x + 16 + (i >= 7 ? 7.5 : 0), l.dy + 12 + (i
 
 let selected = null;
 function frame(T) {
+  const key = dayStart(T) + org;
+  if (key !== layoutKey) { layoutKey = key; layoutStands(relevantStands(dayStart(T))); bgDirty = true; }
   sizeApron();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(bg, 0, 0);
@@ -608,6 +637,7 @@ function frame(T) {
   });
   piles.forEach((list, id) => {
     const l = byId[id], hallLoc = l.hall;
+    if (l.x == null) return;
     const max = hallLoc ? (l.type === 'Chute' ? 20 : 45) : 14;
     list.slice(0, max).forEach(([t, a], i) => {
       const [x, y] = hallLoc ? slotHall(l, i) : slotStand(l, i);
@@ -627,13 +657,15 @@ function frame(T) {
   states.forEach(({ d, st }) => {
     if (st.k === 'off') return;
     const stc = statusOf(st);
-    let p, path = st.path, s;
+    const ok = st.ra && st.ra.x != null && st.rb.x != null;
+    let p, path = ok ? route(st.ra, st.rb) : null, s;
     const moving = st.k === 'dh' || st.k === 'carry';
+    if (moving && !path) return;      // route leaves the stands shown today (only right at midnight)
     if (moving) {
       s = (T - st.t0) / Math.max(1, st.t1 - st.t0) * path.len;
       p = pointAt(path, s);
     } else {
-      const l = st.loc || st.o?.from; if (!l) return;
+      const l = st.loc || st.o?.from; if (!l || l.x == null) return;
       const n = parked.get(l.id) || 0; parked.set(l.id, n + 1);
       if (path && n === 0) { s = path.len; p = pointAt(path, s); }
       else { p = { x: l.x + (n % 2 ? 1 : -1) * (7 + 10 * Math.floor(n / 2)), y: l.hall ? l.dy + 5 : l.dy + 1, dx: 1, dy: 0 }; path = null; }
