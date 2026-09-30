@@ -83,6 +83,7 @@ for fn in ('TransportOrderCreated-logs.json', 'TransportOrderUpdated-logs.json')
             task = tasks.setdefault(tk['id'], {'id': tk['id'], 'events': []})
             task.update({
                 'order': to['id'], 'orderNo': to.get('displayId'),
+                'company': companies.get(to.get('companyId')) or task.get('company'),
                 'from': tk.get('pickupLocationId'), 'to': tk.get('dropoffLocationId'),
                 'flight': tk.get('flightId') or task.get('flight'),
                 'uld': cargo.get('identifierCode') or task.get('uld'),
@@ -116,7 +117,8 @@ for ct in rows('CargoTasks.csv'):
             ev.append([ts_csv(o.get('UpdatedAt')) or created, 'cancelled', drv])
         task = tasks[ct['Id']] = {
             'id': ct['Id'], 'events': [x for x in ev if x[0]], 'order': ct['TransportOrderId'],
-            'orderNo': o.get('DisplayId'), 'from': ct['PickupLocationId'], 'to': ct['DropOffLocationId'],
+            'orderNo': o.get('DisplayId'), 'company': companies.get(o.get('CompanyId')),
+            'from': ct['PickupLocationId'], 'to': ct['DropOffLocationId'],
             'flight': nul(ct['FlightId']), 'type': TYPE_CSV.get(ct['Type'], 'UNSPECIFIED'),
             'urgent': ct['Priority'] == 'Urgent',
             'uld': (cargos.get(ct['CargoId']) or {}).get('IdentifierCode'),
@@ -124,6 +126,7 @@ for ct in rows('CargoTasks.csv'):
     elif ct['Status'] == 'Cancelled' and not any(e[1] == 'cancelled' for e in task['events']):
         task['events'].append([ts_csv(o.get('UpdatedAt')) or task['events'][-1][0], 'cancelled', None])
     task['flight'] = task.get('flight') or nul(ct['FlightId'])
+    task['company'] = task.get('company') or companies.get(o.get('CompanyId'))
 
 # ---- normalise ------------------------------------------------------------
 out_tasks = []
@@ -152,6 +155,7 @@ for t in tasks.values():
         used_flights.add(t['flight'])
     out_tasks.append({
         'id': t['id'], 'order': t['order'], 'orderNo': t.get('orderNo'), 'from': t['from'], 'to': t['to'],
+        'company': t.get('company') or (users.get(driver) or {}).get('company'),
         'flight': t.get('flight'), 'uld': t.get('uld') or '?', 'type': t['type'], 'urgent': t['urgent'],
         'full': full, 'driver': driver, 'ev': clean,
     })

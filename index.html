@@ -28,6 +28,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--ground);
@@ -52,6 +53,10 @@ button:hover, select:hover { border-color: var(--muted); }
 button:focus-visible, select:focus-visible, .drv:focus-visible { outline: 2px solid var(--paint); outline-offset: 1px; }
 button.primary { background: var(--paint); color: #1a1406; border-color: var(--paint); font-weight: 600; min-width: 74px; }
 button[aria-pressed="true"] { border-color: var(--paint); color: var(--paint); }
+.seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; }
+.seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: 7px; }
+.seg button:hover { background: #232d3d; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--ground); font-weight: 700; }
 .label { font: 500 11px var(--f-display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 
 .main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
@@ -119,6 +124,7 @@ aside { display: grid; gap: 14px; min-width: 0; }
         <option value="600">600×</option>
       </select>
       <button id="skip" type="button" title="Jump to the next dispatched order">Next order ›</button>
+      <div class="seg" id="org" role="group" aria-label="Organisation"></div>
     </div>
   </header>
 
@@ -269,12 +275,21 @@ orders.forEach(o => {
   o.nFull = ts.filter(t => t.full).length; o.nEmpty = ts.length - o.nFull;
   o.flight = flights[ts.find(t => t.flight)?.flight] || null;
   o.ready = min(ts.map(t => t.ready));
+  o.company = ts.map(t => t.company).find(Boolean) || null;
 });
 
 const drivers = D.drivers.map((u, i) => ({ ...u, idx: i, tag: u.name.replace(/^driver/i, '').toUpperCase(), segs: [], orders: [] }))
   .sort((a, b) => a.tag.localeCompare(b.tag));
 const drvById = Object.fromEntries(drivers.map(d => [d.id, d]));
 orders.forEach(o => { if (o.driver && o.a && drvById[o.driver]) drvById[o.driver].orders.push(o); });
+
+// ---------- organisation filter ----------
+const ORGS = [...new Set(D.tasks.map(t => t.company).concat(drivers.map(d => d.company)).filter(Boolean))].sort();
+let org = 'all';
+try { const v = localStorage.getItem('apron-org'); if (ORGS.includes(v)) org = v; } catch (e) { /* storage unavailable */ }
+const inOrg = c => org === 'all' || c === org;
+const flightOrgs = new Map();
+D.tasks.forEach(t => { if (t.flight && t.company) (flightOrgs.get(t.flight) || flightOrgs.set(t.flight, new Set()).get(t.flight)).add(t.company); });
 
 function travel(len, start, actual) {
   const base = len / SPEED;
@@ -338,8 +353,13 @@ let tMin = Infinity, tMax = -Infinity;
 D.tasks.forEach(t => t.ev.forEach(e => { tMin = Math.min(tMin, e[0]); tMax = Math.max(tMax, e[0]); }));
 tMin = Math.floor(tMin / 3600) * 3600; tMax = Math.ceil(tMax / 3600) * 3600;
 const nBins = Math.round((tMax - tMin) / 3600);
-const bins = Array.from({ length: nBins }, () => [0, 0]);
-D.tasks.forEach(t => { if (t.del) bins[Math.min(nBins - 1, Math.floor((t.del - tMin) / 3600))][t.full ? 0 : 1]++; });
+let bins = [], maxBin = 1;
+function computeBins() {
+  bins = Array.from({ length: nBins }, () => [0, 0]);
+  D.tasks.forEach(t => { if (t.del && inOrg(t.company)) bins[Math.min(nBins - 1, Math.floor((t.del - tMin) / 3600))][t.full ? 0 : 1]++; });
+  maxBin = Math.max(1, ...bins.map(b => b[0] + b[1]));
+}
+computeBins();
 let busiest = 0; bins.forEach((b, i) => { if (b[0] + b[1] > bins[busiest][0] + bins[busiest][1]) busiest = i; });
 
 // ---------- log events ----------
@@ -349,7 +369,7 @@ orders.forEach(o => {
   const what = [o.nFull && `${o.nFull} full`, o.nEmpty && `${o.nEmpty} empty`].filter(Boolean).join(' + ') + ' ULD';
   const fl = o.flight ? ` · ${o.flight.no}` : '';
   const route = `${o.from.label} → ${o.to.label}`;
-  const push = (t, verb, color, who) => t && log.push({ t, html: `<span class="v" style="color:${color}">${who} ${verb}</span> ${what} · ${route}${fl}` });
+  const push = (t, verb, color, who) => t && log.push({ t, org: o.company, html: `<span class="v" style="color:${color}">${who} ${verb}</span> ${what} · ${route}${fl}` });
   push(o.ready, `#${o.no ?? '?'} created`, C.muted, '');
   push(o.a, 'accepted', C.pickup, drv);
   push(o.c, 'collected', o.full ? C.full : C.empty, drv);
@@ -357,7 +377,6 @@ orders.forEach(o => {
   push(o.x, 'cancelled', C.alert, '');
 });
 log.sort((a, b) => a.t - b.t);
-const dispatchTimes = [...new Set([...orders.values()].map(o => o.a).filter(Boolean))].sort((a, b) => a - b);
 
 // ---------- rendering: logical coordinates drawn at high resolution ----------
 const cv = document.getElementById('apron'), ctx = cv.getContext('2d');
@@ -545,6 +564,7 @@ function frame(T) {
     const l = byId[f.stand]; if (!l || l.x == null || l.hall) return;
     const out = f.etd || f.std; if (!out) return;
     const inn = f.sta || out - 150 * 60;
+    if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
     if (T >= inn && T <= out + 5 * 60) planeAt.set(l.id, f);
   });
   planeAt.forEach((f, id) => {
@@ -560,6 +580,7 @@ function frame(T) {
   const add = (l, t, a = 1) => { if (!piles.has(l.id)) piles.set(l.id, []); piles.get(l.id).push([t, a]); };
   let waiting = 0;
   D.tasks.forEach(t => {
+    if (!inOrg(t.company)) return;
     const o = t.o, from = byId[t.from], to = byId[t.to];
     const gone = o.vc ?? t.can ?? Infinity;
     if (T >= t.ready && T < gone && !(t.can && T >= t.can)) { add(from, t); waiting++; }
@@ -589,7 +610,7 @@ function frame(T) {
   });
 
   // tugs with dolly trains
-  const states = drivers.map(d => ({ d, st: driverState(d, T) }));
+  const states = drivers.filter(d => inOrg(d.company)).map(d => ({ d, st: driverState(d, T) }));
   const parked = new Map();
   const tags = [];
   states.forEach(({ d, st }) => {
@@ -640,8 +661,9 @@ function renderPanels(T, res) {
   $('clockD').textContent = fmtD(T) + ' UTC';
   const d0 = dayStart(T);
   let full = 0, empty = 0, runs = 0;
-  D.tasks.forEach(t => { if (t.del && t.del >= d0 && t.del <= T) t.full ? full++ : empty++; });
-  orders.forEach(o => { if (o.d && o.d >= d0 && o.d <= T) runs++; });
+  D.tasks.forEach(t => { if (t.del && t.del >= d0 && t.del <= T && inOrg(t.company)) t.full ? full++ : empty++; });
+  orders.forEach(o => { if (o.d && o.d >= d0 && o.d <= T && inOrg(o.company)) runs++; });
+  drivers.forEach(d => d.el.hidden = !inOrg(d.company));
   const on = res.states.filter(s => s.st.k !== 'off').length;
   const moving = res.states.filter(s => s.st.k === 'carry' || s.st.k === 'dh').length;
   $('stats').innerHTML = [
@@ -669,8 +691,9 @@ function renderPanels(T, res) {
     el.querySelector('.job').innerHTML = job;
   });
   // ticker
-  let hi = log.length; while (hi > 0 && log[hi - 1].t > T) hi--;
-  $('ticker').innerHTML = log.slice(Math.max(0, hi - 14), hi).reverse()
+  const lg = org === 'all' ? log : log.filter(e => e.org === org);
+  let hi = lg.length; while (hi > 0 && lg[hi - 1].t > T) hi--;
+  $('ticker').innerHTML = lg.slice(Math.max(0, hi - 14), hi).reverse()
     .map(e => `<li><time>${fmtT(e.t)}</time><span>${e.html}</span></li>`).join('') || '<li><time></time><span>No orders yet.</span></li>';
 }
 
@@ -678,7 +701,6 @@ function renderPanels(T, res) {
 const tl = $('tl'), tctx = tl.getContext('2d');
 let tlW = 0, tlH = 0, dpr = 1;
 function sizeTL() { dpr = window.devicePixelRatio || 1; tlW = tl.clientWidth; tlH = tl.clientHeight; tl.width = tlW * dpr; tl.height = tlH * dpr; }
-const maxBin = Math.max(...bins.map(b => b[0] + b[1]));
 function drawTL(T) {
   if (tl.clientWidth !== tlW || tl.clientHeight !== tlH) sizeTL();   // page may have loaded hidden or at 0 width
   if (!tlW || !tlH) return;
@@ -735,7 +757,28 @@ const playBtn = $('play');
 const syncPlay = () => playBtn.textContent = playing ? 'Pause' : 'Play';
 playBtn.addEventListener('click', () => { playing = !playing; syncPlay(); });
 $('speed').addEventListener('change', e => speed = +e.target.value);
-$('skip').addEventListener('click', () => { const n = dispatchTimes.find(t => t > T + 5); if (n) { T = n - 20; render(true); } });
+$('skip').addEventListener('click', () => {
+  let n = Infinity;
+  orders.forEach(o => { if (o.a && o.a > T + 5 && inOrg(o.company)) n = Math.min(n, o.a); });
+  if (n < Infinity) { T = n - 20; render(true); }
+});
+function buildOrgFilter() {
+  const box = $('org');
+  box.innerHTML = '';
+  ['all', ...ORGS].forEach(v => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = 'org-' + v; b.textContent = v === 'all' ? 'All' : v;
+    b.setAttribute('aria-pressed', String(org === v));
+    b.addEventListener('click', () => {
+      org = v;
+      try { localStorage.setItem('apron-org', v); } catch (e) { /* storage unavailable */ }
+      if (selected && !inOrg(drvById[selected]?.company)) selected = null;
+      computeBins(); buildOrgFilter(); render(true);
+    });
+    box.append(b);
+  });
+}
+buildOrgFilter();
 document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playing = !playing; syncPlay(); } });
 syncPlay();
 
