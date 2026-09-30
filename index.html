@@ -347,6 +347,35 @@ drivers.forEach(d => {
   }
 });
 
+// ---------- banks: an empty ULD delivered to a bank is filled there and leaves full ----------
+// The export has no per-ULD identity for empties (generic codes like AKE-UA), so each full ULD that
+// becomes ready at a bank takes the oldest empty delivered to that bank by the same organisation in
+// the previous 4 hours. It turns from empty to full in place. With no empty available, a full ULD
+// just appears. Empties that nobody fills are removed after 4 hours.
+const BANK_WAIT = 4 * 3600;
+const bankItems = [];
+(() => {
+  const byBank = new Map();
+  const bank = id => byBank.get(id) || byBank.set(id, { empties: [], fulls: [] }).get(id);
+  D.tasks.forEach(t => {
+    if (byId[t.to].type === 'Chute' && t.del && t.o.vd != null) bank(t.to).empties.push({ t, at: Math.max(t.o.vd, t.del) });
+    if (byId[t.from].type === 'Chute') bank(t.from).fulls.push(t);
+  });
+  byBank.forEach(({ empties, fulls }, id) => {
+    empties.sort((a, b) => a.at - b.at); fulls.sort((a, b) => a.ready - b.ready);
+    const used = new Set();
+    fulls.forEach(f => {
+      const gone = Math.min(f.o.vc ?? Infinity, f.can ?? Infinity);
+      const e = empties.find(e => !used.has(e) && e.t.company === f.company && e.at <= f.ready && f.ready - e.at <= BANK_WAIT);
+      if (e) used.add(e);
+      bankItems.push({ bank: id, company: f.company, t0: e ? e.at : f.ready, fullAt: f.ready, t1: gone, urgent: f.urgent });
+    });
+    empties.forEach(e => {
+      if (!used.has(e)) bankItems.push({ bank: id, company: e.t.company, t0: e.at, fullAt: Infinity, t1: e.at + BANK_WAIT, urgent: false });
+    });
+  });
+})();
+
 const OFF_AFTER = 75 * 60, ON_BEFORE = 20 * 60;
 function driverState(d, T) {
   const s = d.segs;
@@ -623,8 +652,8 @@ function frame(T) {
     if (!inOrg(t.company)) return;
     const o = t.o, from = byId[t.from], to = byId[t.to];
     const gone = o.vc ?? t.can ?? Infinity;
-    if (T >= t.ready && T < gone && !(t.can && T >= t.can)) { add(from, t); waiting++; }
-    if (t.del && o.vd != null) {
+    if (from.type !== 'Chute' && T >= t.ready && T < gone && !(t.can && T >= t.can)) { add(from, t); waiting++; }
+    if (t.del && o.vd != null && to.type !== 'Chute') {
       const arrive = Math.max(o.vd, t.del);
       let leave = arrive + 25 * 60;
       if (!to.hall) {
@@ -634,6 +663,12 @@ function frame(T) {
       }
       if (T >= arrive && T < leave) add(to, t, to.hall ? .85 : 1);
     }
+  });
+  bankItems.forEach(b => {
+    if (!inOrg(b.company) || T < b.t0 || T >= b.t1) return;
+    const full = T >= b.fullAt;
+    if (full) waiting++;          // a filled ULD is waiting for a tug
+    add(byId[b.bank], { full, urgent: full && b.urgent });
   });
   piles.forEach((list, id) => {
     const l = byId[id], hallLoc = l.hall;
