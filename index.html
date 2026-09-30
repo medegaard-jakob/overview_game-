@@ -197,6 +197,7 @@ aside { display: grid; gap: 14px; min-width: 0; }
           <div><span class="sw" style="background:var(--empty)"></span>Empty run</div>
           <div><span class="sw" style="background:var(--pickup)"></span>To pickup, no load</div>
           <div><span class="sw" style="background:var(--idle)"></span>Idle / waiting</div>
+          <div><span class="sw" style="background:var(--pickup);opacity:.6"></span>Assigned, not started</div>
           <div><span class="sw" style="background:var(--full);box-shadow:inset -4px 4px 0 -2px var(--alert)"></span>Urgent ULD (red dot)</div>
           <div><span class="sw" style="border:2px solid var(--alert)"></span>Overdue, still waiting</div>
           <div><span class="sw" style="background:var(--full);box-shadow:inset 0 -3px var(--alert)"></span>Delivered late</div>
@@ -350,10 +351,12 @@ function travel(len, start, actual) {
   return start - actual > 60 ? Math.max(20, base * 0.35) : base;   // catch up when running late
 }
 drivers.forEach(d => {
-  d.orders.sort((a, b) => a.a - b.a);
+  // A driver may accept an order and keep it open while doing another, so the tug drives its runs in
+  // the order the ULDs were collected. Orders accepted but never collected don't move the tug.
+  const runs = d.orders.filter(o => o.c).sort((a, b) => a.c - b.c);
   let pos = null, t = -Infinity, last = null;
-  for (const o of d.orders) {
-    const pick = o.from, drop = o.to;
+  runs.forEach((o, i) => {
+    const pick = o.from, drop = o.to, next = runs[i + 1];
     let now = Math.max(o.a, t);
     if (pos && pos !== pick) {
       const p = route(pos, pick), dur = travel(p.len, now, o.a);
@@ -365,17 +368,15 @@ drivers.forEach(d => {
       const p = route(pick, drop), dur = travel(p.len, cs, o.c);
       o.vc = cs;
       d.segs.push({ k: 'carry', t0: cs, t1: cs + dur, ra: pick, rb: drop, o }); now = cs + dur;
-      o.vd = Math.max(now, o.d || now);
-      if (o.vd > now) d.segs.push({ k: 'atdrop', t0: now, t1: o.vd, loc: drop, ra: pick, rb: drop, o });
-      now = o.vd; pos = drop;
-    } else {
-      const e = Math.max(o.x || now, now);
-      if (e > now) d.segs.push({ k: 'atpick', t0: now, t1: e, loc: pick, ra: last?.[0], rb: last?.[1], o });
-      o.vc = e; now = e; pos = pick;
+      // wait at the drop-off until the delivery is confirmed, unless the next run's collection comes first
+      const until = Math.min(o.d || now, next ? next.c : Infinity);
+      o.vd = now;
+      if (until > now) d.segs.push({ k: 'atdrop', t0: now, t1: until, loc: drop, ra: pick, rb: drop, o });
+      now = Math.max(now, until); pos = drop;
     }
     d.segs.push({ k: 'idle', t0: now, t1: now, loc: pos, o });
     t = now;
-  }
+  });
 });
 
 // ---------- banks: an empty ULD delivered to a bank is filled there and leaves full ----------
@@ -419,9 +420,12 @@ function driverState(d, T) {
   let i = -1;
   for (let j = 0; j < s.length; j++) { if (s[j].t0 <= T) i = j; else break; }
   const next = s.find(x => x.t0 > T && x.k !== 'idle');
-  if (i < 0) return next && next.t0 - T < ON_BEFORE ? { k: 'idle', loc: next.o.from, o: null } : { k: 'off' };
-  const seg = s[i];
-  if (seg.k !== 'idle' && T <= seg.t1) return seg;
+  const seg = i >= 0 ? s[i] : null;
+  if (seg && seg.k !== 'idle' && T <= seg.t1) return seg;
+  // not driving, but holding an accepted order that isn't collected yet (or was cancelled before collection)
+  const open = d.orders.find(o => o.a <= T && T < (o.c || o.x || o.d || Infinity));
+  if (open) return { k: 'assigned', loc: seg ? (seg.loc || seg.o.to) : open.from, o: open };
+  if (!seg) return next && next.t0 - T < ON_BEFORE ? { k: 'idle', loc: next.o.from, o: null } : { k: 'off' };
   const idleFor = T - seg.t1;
   if (idleFor > OFF_AFTER && !(next && next.t0 - T < ON_BEFORE)) return { k: 'off', loc: seg.loc };
   return { k: 'idle', loc: seg.loc || seg.o.to, o: seg.o };
@@ -432,6 +436,7 @@ function statusOf(st) {
     case 'atpick': return { text: 'Loading', color: C.pickup };
     case 'carry': return st.o.full ? { text: 'Full run', color: C.full } : { text: 'Empty run', color: C.empty };
     case 'atdrop': return { text: 'Unloading', color: st.o.full ? C.full : C.empty };
+    case 'assigned': return { text: 'Assigned', color: C.pickup };
     case 'idle': return { text: 'Idle', color: C.idle };
     default: return { text: 'Off shift', color: '#4a525d' };
   }
@@ -719,7 +724,7 @@ function frame(T) {
       if (!to.hall) {
         // stay until this ULD's own flight departs (max 3 h), never the next flight on the same stand
         const f = flights[t.flight], out = f && (f.etd || f.std);
-        leave = out && out > arrive ? Math.min(out, arrive + 3 * 3600) : arrive + 45 * 60;
+        leave = out && out > t.del ? Math.min(out, t.del + 3 * 3600) : arrive + 45 * 60;   // real delivery vs departure
       }
       if (T >= arrive && T < leave) add(to, t, to.hall ? .85 : 1);
     }
@@ -766,7 +771,7 @@ function frame(T) {
       else { p = { x: l.x + (n % 2 ? 1 : -1) * (7 + 10 * Math.floor(n / 2)), y: l.hall ? l.dy + 5 : l.dy + 1, dx: 1, dy: 0 }; path = null; }
     }
     if (st.k === 'carry' || st.k === 'atdrop') {
-      st.o.tasks.slice(0, 6).forEach((t, k) => {
+      st.o.tasks.filter(t => !(t.can && t.can <= T)).slice(0, 6).forEach((t, k) => {
         const q = path ? pointAt(path, s - 8.5 - k * 7.5) : { x: p.x + 8 + k * 7.5, y: p.y };
         drawDolly(q.x - 3, q.y - 3); drawULD(q.x - 3, q.y - 3.4, t.full); drawMarks(q.x - 3, q.y - 3.4, t, T);
       });
@@ -846,7 +851,7 @@ function renderPanels(T, res) {
   ].map(([l, v, tot]) => `<div class="ds"><span class="label">${l}</span><b style="color:${v ? C.alert : C.muted}">${v}</b>
     <div class="bar"><i style="width:${tot ? Math.round(v / tot * 100) : 0}%;background:${C.alert}"></i></div><small>of ${tot} today</small></div>`).join('');
 
-  const inTransit = res.states.reduce((n, s) => n + (s.st.k === 'carry' || s.st.k === 'atdrop' ? s.st.o.tasks.length : 0), 0);
+  const inTransit = res.states.reduce((n, s) => n + (s.st.k === 'carry' || s.st.k === 'atdrop' ? s.st.o.tasks.filter(t => !(t.can && t.can <= T)).length : 0), 0);
   lastStats = { full, empty, runs, flights: flSoFar.size, urgent: urg.now, escalated: esc.now, late: lateC.now, waiting: res.waiting, inTransit, moving, onShift: on };
   $('stats').innerHTML = [
     ['ULDs waiting for a tug', res.waiting, res.waiting > 12 ? C.alert : C.ink],

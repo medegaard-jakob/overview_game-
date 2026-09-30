@@ -7,7 +7,7 @@ Flights, users, Companies). They do not come from data/replay.json, so a bug in 
 in the page shows up as a mismatch instead of being copied into the expectation.
 
 Part A compares data/replay.json with the raw export.
-Part B opens index.html headless (tools/snapshot.js) at sample moments and compares what the page
+Part B opens index.html headless (tools/snapshot.js) every 15 minutes across the replay and compares what the page
 shows with the raw export.
 
 Result per check: PASS, WARN (explainable by a documented simplification, e.g. animation catch-up)
@@ -60,9 +60,12 @@ cargos = {c['Id']: c for c in rows('Cargos.csv')}
 flights = {f['Id']: f for f in rows('Flights.csv')}
 test_flights = {i for i, f in flights.items() if 'beumer' in f['FlightNumber'].lower()}
 
-raw = {}
+raw, deleted = {}, {}
 for c in rows('CargoTasks.csv'):
-    if c['IsDeleted'] == '1' or c['FlightId'] in test_flights:
+    if c['FlightId'] in test_flights:
+        continue
+    if c['IsDeleted'] == '1':      # removed from its order
+        deleted[c['Id']] = orders.get(c['TransportOrderId'], {}).get('DisplayId')
         continue
     o = orders.get(c['TransportOrderId'], {})
     pick = locs.get(c['PickupLocationId'], {})
@@ -102,10 +105,14 @@ def last(t, st):
 missing = [i for i in raw if i not in rtasks]
 check('A', 'Every raw ULD task is in the replay', len(missing), len(raw),
       '{bad} of {total} raw tasks missing from replay.json', [f'task {i}' for i in missing])
-extra = [i for i in rtasks if i not in raw]
+extra = [i for i in rtasks if i not in raw and i not in deleted]
 check('A', 'Replay tasks not in CargoTasks.csv', len(extra), len(rtasks),
-      '{bad} tasks come only from the event logs (created after the DB snapshot or deleted since)',
-      [f"order #{rtasks[i]['orderNo']} task {i}" for i in extra], warn_only=True)
+      '{bad} replay tasks the DB does not know (log-only or test orders)',
+      [f"order #{rtasks[i]['orderNo']} ULD {rtasks[i]['uld']}" for i in extra])
+bad = [f"order #{no}: ULD {rtasks[i]['uld']} ends '{rtasks[i]['ev'][-1][1]}'" for i, no in deleted.items()
+       if i in rtasks and rtasks[i]['ev'][-1][1] not in ('cancelled', 'delivered')]
+check('A', 'ULDs removed from their order end there', len(bad), len([i for i in deleted if i in rtasks]),
+      '{bad} of {total} removed ULDs still carry on in the replay', bad)
 
 STATUS = {'Delivered': 'delivered', 'Cancelled': 'cancelled', 'Ready': 'ready'}
 bad = []
@@ -133,6 +140,10 @@ check('A', 'Driver matches TransportOrders.AssignedUserId', len(bad), len(raw), 
 
 bad = [f"order #{t['orderNo']}: DB {t['company']}, replay {rtasks[t['id']]['company']}" for t in raw.values()
        if t['id'] in rtasks and t['company'] and rtasks[t['id']]['company'] != t['company']]
+bad = [f"order #{t['orderNo']}: DB {t['pickup']} → {t['drop']}, replay {rloc[rtasks[t['id']]['from']]['name']} → {rloc[rtasks[t['id']]['to']]['name']}"
+       for t in raw.values() if t['id'] in rtasks
+       and (rloc[rtasks[t['id']]['from']]['name'], rloc[rtasks[t['id']]['to']]['name']) != (t['pickup'], t['drop'])]
+check('A', 'Pickup and drop-off match CargoTasks', len(bad), len(raw), '{bad} of {total} tasks go from or to another place', bad)
 check('A', 'Organisation matches TransportOrders.CompanyId', len(bad), len(raw), '{bad} of {total} tasks with another organisation', bad)
 
 bad = [f"order #{t['orderNo']}: pickup {t['pickup']}" for t in raw.values()
@@ -157,9 +168,11 @@ check('A', 'Status events in logical order', len(bad), len(rtasks), '{bad} of {t
 # ---------------- B. page vs raw export ----------------
 if RUN_PAGE:
     orgs = ['all'] + sorted({t['company'] for t in raw.values() if t['company']})
-    days = sorted({t['finish'] // 86400 * 86400 for t in delivered})
-    times = [d + h * 3600 for d in days for h in (6, 8, 10, 12, 15, 18)]
-    reqs = [{'t': t, 'org': o} for t in times for o in orgs]
+    # every 15 minutes across the whole replay for All, hourly per organisation
+    evs = [e[0] for t in rtasks.values() for e in t['ev']]
+    t0, t1 = min(evs) // 3600 * 3600, max(evs) // 3600 * 3600 + 3600
+    reqs = [{'t': t, 'org': 'all'} for t in range(t0, t1, 900)]
+    reqs += [{'t': t, 'org': o} for t in range(t0, t1, 3600) for o in orgs[1:]]
     with tempfile.TemporaryDirectory() as tmp:
         rq, out = os.path.join(tmp, 'req.json'), os.path.join(tmp, 'out.json')
         json.dump(reqs, open(rq, 'w'))
@@ -179,24 +192,24 @@ if RUN_PAGE:
             sure = sum(1 for t in mine if t['full'] == full and d0 <= t['finish'] <= T - TOL)
             maybe = sum(1 for t in mine if t['full'] == full and T - TOL < t['finish'] <= T + TOL)
             got = s['stats'][key]
-            if not (sure <= got <= sure + maybe + len(extra)):
+            if not (sure <= got <= sure + maybe):
                 bad_f.append(f"{fmt(T)} {o}: {key} delivered today page {got}, DB {sure}(+{maybe} at the boundary)")
         by_order = collections.defaultdict(list)
         for t in mine:
             by_order[t['order']].append(t['finish'])
         sure = sum(1 for f in by_order.values() if d0 <= max(f) <= T - TOL)
         maybe = sum(1 for f in by_order.values() if T - TOL < max(f) <= T + TOL)
-        if not (sure <= s['stats']['runs'] <= sure + maybe + len(extra)):
+        if not (sure <= s['stats']['runs'] <= sure + maybe):
             bad_r.append(f"{fmt(T)} {o}: runs page {s['stats']['runs']}, DB {sure}(+{maybe})")
         for key, pred in (('urgent', lambda t: t['urgent']), ('late', lambda t: t['due'] and t['finish'] > t['due'] + TOL)):
             loose = (lambda t: t['due'] and t['finish'] > t['due'] - TOL) if key == 'late' else pred
             sure = sum(1 for t in mine if pred(t) and d0 <= t['finish'] <= T - TOL)
             most = sum(1 for t in mine if loose(t) and d0 <= t['finish'] <= T + TOL)
-            if not (sure <= s['stats'][key] <= most + len(extra)):
+            if not (sure <= s['stats'][key] <= most):
                 bad_u.append(f"{fmt(T)} {o}: {key} delivered today page {s['stats'][key]}, DB {sure}..{most}")
         sure = {t['flight'] for t in mine if t['flight'] and d0 <= t['finish'] <= T - TOL}
         maybe = {t['flight'] for t in mine if t['flight'] and d0 <= t['finish'] <= T + TOL} - sure
-        if not (len(sure) <= s['stats']['flights'] <= len(sure) + len(maybe) + len(extra)):
+        if not (len(sure) <= s['stats']['flights'] <= len(sure) + len(maybe)):
             bad_fl.append(f"{fmt(T)} {o}: flights processed page {s['stats']['flights']}, DB {len(sure)}(+{len(maybe)})")
     check('B', 'Counters: full/empty ULDs delivered today', len(bad_f), len(snaps) * 2, '{bad} of {total} counter readings disagree with the DB', bad_f)
     check('B', 'Day summary: urgent and late deliveries', len(bad_u), len(snaps) * 2,
@@ -210,6 +223,8 @@ if RUN_PAGE:
     for s in snaps:
         by_t[s['t']][s['org']] = s
     for T, group in by_t.items():
+        if len(group) < len(orgs):
+            continue
         for key in ('full', 'empty', 'runs', 'waiting'):
             parts = sum(group[o]['stats'][key] for o in orgs[1:])
             if group['all']['stats'][key] != parts:
@@ -226,7 +241,7 @@ if RUN_PAGE:
         if s['t'] != snaps[0]['t']:
             continue
         exp = sum(1 for t in delivered if in_org(t['company'], s['org']))
-        if not (exp <= s['chartTotal'] <= exp + len(extra)):
+        if not (exp <= s['chartTotal'] <= exp):
             bad.append(f"{s['org']}: chart {s['chartTotal']} ULDs, DB {exp}")
     check('B', 'Hourly chart total = delivered ULDs', len(bad), len(orgs), '{bad} of {total} chart totals disagree', bad)
 
@@ -235,11 +250,13 @@ if RUN_PAGE:
     carry = collections.defaultdict(list)   # driver -> [(accepted, delivered, full, orderNo)]
     by_order = collections.defaultdict(list)
     for t in raw.values():
-        if t['driver'] and t['start'] and t['finish']:
+        if t['driver'] and t['start'] and (t['finish'] or t['status'] == 'Cancelled'):
             by_order[(t['driver'], t['order'])].append(t)
-    for (drv, _), ts_ in by_order.items():
-        carry[drv].append((min(t['start'] for t in ts_), max(t['finish'] for t in ts_), any(t['full'] for t in ts_), ts_[0]['orderNo']))
-    BUSY = {'To pickup', 'Loading', 'Full run', 'Empty run', 'Unloading'}
+    for (drv, oid), ts_ in by_order.items():
+        # an accepted order that was cancelled stays open until the order's last update
+        end = max(t['finish'] or ts(orders[oid]['UpdatedAt']) for t in ts_)
+        carry[drv].append((min(t['start'] for t in ts_), end, any(t['full'] for t in ts_), ts_[0]['orderNo']))
+    BUSY = {'Assigned', 'To pickup', 'Loading', 'Full run', 'Empty run', 'Unloading'}
     hard, soft, n = [], [], 0
     for s in snaps:
         if s['org'] != 'all':
@@ -255,6 +272,25 @@ if RUN_PAGE:
             elif win and d['status'] in ('Full run', 'Empty run') and (d['status'] == 'Full run') != win[0][2]:
                 hard.append(f"{fmt(s['t'])} {d['tag']}: page '{d['status']}' but order #{win[0][3]} is {'full' if win[0][2] else 'empty'}")
     check('B', 'Driver busy/idle matches DB order window', len(hard), n, '{bad} of {total} driver readings contradict the DB', hard)
+    # the order a busy driver shows must be one of their orders the DB has open at that moment
+    ono = {o['Id']: o.get('DisplayId') for o in orders.values()}
+    hard2, soft2, n2 = [], [], 0
+    for s in snaps:
+        if s['org'] != 'all':
+            continue
+        for d in s['drivers']:
+            if not d['order'] or d['status'] not in BUSY:
+                continue
+            n2 += 1
+            mine = carry.get(d['id'], [])
+            if any(c[3] == ono.get(d['order']) and c[0] <= s['t'] < c[1] for c in mine):
+                continue
+            msg = f"{fmt(s['t'])} {d['tag']}: page shows #{ono.get(d['order'])}, DB open: " + (', '.join('#' + c[3] for c in mine if c[0] <= s['t'] < c[1]) or 'none')
+            near = any(c[3] == ono.get(d['order']) and c[0] - LAG <= s['t'] < c[1] + LAG for c in mine)
+            (soft2 if near else hard2).append(msg)
+    check('B', 'Driver shows an order the DB has open', len(hard2), n2, '{bad} of {total} busy readings show an order that is not open', hard2)
+    check('B', f'Driver order within {LAG // 60} min of its DB window', len(soft2), n2,
+          '{bad} of {total} readings are the tug finishing or starting a run just outside the DB window', soft2, warn_only=True)
     check('B', f'Driver status within {LAG // 60} min of a status change', len(soft), n,
           '{bad} of {total} readings differ only because the tug is still catching up with the log', soft, warn_only=True)
 

@@ -20,7 +20,9 @@ This reads `Locations.csv`, `Areas.csv`, `users.csv`, `Companies.csv`, `Flights.
 `CargoTasks.csv`, `Cargos.csv` and the `TransportOrderCreated/Updated` and `flightCreated/Updated` log exports,
 and writes `data/replay.json` + `data/replay.js`.
 
-Status timestamps come from the transport-order event logs; tasks missing from the logs fall back to the
+Status timestamps come from the transport-order event logs, replayed oldest-first. Orders the database never had
+(test orders that only exist in the logs) are left out, and ULDs removed from an order end at the moment they
+were removed. Creation times come from CargoTaskHistory / TransportOrders when the creation log is missing; tasks missing from the logs fall back to the
 `CargoTasks.csv` actual start/finish times. A ULD leaving Empty Can Storage counts as empty; everything else counts as full.
 Tug movement between timestamps is simulated at a constant speed.
 Flights with "Beumer" in the flight number are vendor test flights and are left out, together with their orders.
@@ -37,8 +39,9 @@ python3 tools/validate.py path/to/extracted/Data
 
 - **Part A:** the replay data vs the raw export. Every task present, final status, delivered
   time, driver, organisation, full/empty rule and event order.
-- **Part B:** what the page shows vs the raw export, at 6 moments per day for All / Menzies / United.
-  Counters, runs, organisation filter sums, hourly chart total, driver busy/idle, planes on stand.
+- **Part B:** what the page shows vs the raw export, every 15 minutes across the whole replay (hourly per
+  organisation). Counters, runs, flights, urgent and late counts, organisation filter sums, hourly chart
+  total, driver busy/idle and which order each driver shows, planes on stand.
 
 Checks are PASS, WARN (a documented simplification or a fact about the data) or FAIL.
 The script exits with code 1 if anything fails.

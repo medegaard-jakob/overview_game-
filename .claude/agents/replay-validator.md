@@ -38,7 +38,22 @@ report. You do not change code or data unless the person who called you asks you
    - run `node tools/snapshot.js index.html <req.json> <out.json>` with one moment between
      collection and delivery and one just after delivery. Confirm the driver shows a Full/Empty run
      with the right order, and that the ULDs then appear at the drop-off.
-5. WARN items are documented simplifications or data facts. Report their counts, but only dig
+5. Check the modelling rules the script does not cover yet, against raw rows (use
+   `window.apronDebug.snapshot(t, org)` via tools/snapshot.js, whose `piles` field gives full/empty
+   ULDs per location name):
+   - **Banks:** an empty ULD delivered to a bank turns full when the next full ULD at that bank
+     becomes ready. It takes the oldest empty first, from the same organisation, within 4 hours. A
+     full ULD with no empty to fill appears on its own; unfilled empties leave after 4 hours. Pick one
+     bank and hour, and confirm the pile matches that rule applied to the raw CargoTasks rows.
+   - **Stands shown:** only stands with ULD activity or a plane that UTC day, for the selected
+     organisation. Confirm that no stand used that day is missing.
+   - **Stand piles:** a delivered ULD stays at its drop-off stand until its own flight departs,
+     for at most 3 hours (45 min if the departure is unknown).
+   - **Urgency:** a task becomes urgent at CargoTasks.ElevateUrgencyTime when that is before the
+     first urgent log line, otherwise at the first urgent log line. "Late" means delivered after
+     LatestFinishTime. Spot-check 2 escalated tasks and 2 late deliveries.
+   - Report any rule that disagrees with what the raw data suggests the operation does.
+6. WARN items are documented simplifications or data facts. Report their counts, but only dig
    into one if its count changed a lot compared with the previous report in git history.
 
 ## Report back

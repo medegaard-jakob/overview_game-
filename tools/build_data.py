@@ -75,14 +75,22 @@ STATUS = {'READY': 'ready', 'AWAITING_START_TIME': 'waiting', 'AWAITING_DEPENDEN
 # ---- tasks: event stream from logs --------------------------------------
 tasks = {}
 order_of_task = {}
+# The log exports are newest-first; replay them oldest-first so later lines win.
+log_lines = []
 for fn in ('TransportOrderCreated-logs.json', 'TransportOrderUpdated-logs.json'):
     for e in json.load(open(os.path.join(SRC, fn))):
         line = json.loads(e['line'])
         body = line.get('metadata', {}).get('body')
-        if not body:
-            continue
-        to = json.loads(body)['transportOrder']
-        t = ts_iso(line['@timestamp'])
+        if body:
+            log_lines.append((line['@timestamp'], json.loads(body)['transportOrder']))
+log_lines.sort(key=lambda x: x[0])
+order_tasks, removed_at = {}, {}   # a task that drops out of its order's task list was removed from the order
+for stamp, to in log_lines:
+        t = ts_iso(stamp)
+        ids = {tk['id'] for tk in to['tasks']}
+        for gone in order_tasks.get(to['id'], set()) - ids:
+            removed_at.setdefault(gone, t)
+        order_tasks[to['id']] = ids
         for tk in to['tasks']:
             cargo = tk.get('cargo', {})
             task = tasks.setdefault(tk['id'], {'id': tk['id'], 'events': []})
@@ -107,13 +115,25 @@ for fn in ('TransportOrderCreated-logs.json', 'TransportOrderUpdated-logs.json')
 # ---- fallback / enrichment from DB snapshot ----------------------------
 orders = {o['Id']: o for o in rows('TransportOrders.csv')}
 cargos = {c['Id']: c for c in rows('Cargos.csv')}
+# first time the DB saw each task, and when it was deleted (removed from its order)
+hist_first, hist_deleted = {}, {}
+for h in rows('CargoTaskHistory.csv'):
+    at = ts_csv(h['HistoryCreatedAt'])
+    hist_first[h['CargoTaskId']] = min(at, hist_first.get(h['CargoTaskId'], at))
+    if h['IsDeleted'] == '1':
+        hist_deleted[h['CargoTaskId']] = min(at, hist_deleted.get(h['CargoTaskId'], at))
 TYPE_CSV = {'FinalSortFlight': 'FINAL_SORT_FLIGHT', 'EusFinalSort': 'EUS_FINAL_SORT', 'FinalSortLus': 'FINAL_SORT_LUS',
             'LusFlight': 'LUS_FLIGHT', 'Unspecified': 'UNSPECIFIED'}
 for ct in rows('CargoTasks.csv'):
-    if ct['IsDeleted'] == '1':
-        continue
     o = orders.get(ct['TransportOrderId'], {})
     task = tasks.get(ct['Id'])
+    if ct['IsDeleted'] == '1':
+        # removed from its order: end it where it was removed, unless it was delivered first
+        if task and not any(e[1] == 'delivered' for e in task['events']):
+            at = min(x for x in (hist_deleted.get(ct['Id']), removed_at.get(ct['Id']), ts_csv(o.get('UpdatedAt'))) if x)
+            task['events'].append([at, 'cancelled', None])
+            task['removed'] = True
+        continue
     if task is None:
         created = ts_csv(o.get('CreatedAt')) or ts_csv(ct['EarliestStartTime'])
         start, fin = ts_csv(ct['ActualStartTime']), ts_csv(ct['ActualFinishTime'])
@@ -135,6 +155,12 @@ for ct in rows('CargoTasks.csv'):
         }
     elif ct['Status'] == 'Cancelled' and not any(e[1] == 'cancelled' for e in task['events']):
         task['events'].append([ts_csv(o.get('UpdatedAt')) or task['events'][-1][0], 'cancelled', None])
+    # The creation log only starts on 24 Sep: use the DB's first sight of the task when it's earlier.
+    first_ev = min(task['events'], key=lambda e: e[0])
+    created = hist_first.get(ct['Id']) or (ts_csv(o.get('CreatedAt')) if first_ev[1] not in ('ready', 'waiting') else None)
+    if created and created < first_ev[0]:
+        task['events'].append([created, 'ready', None])
+    task['in_db'] = True
     task['flight'] = task.get('flight') or nul(ct['FlightId'])
     task['company'] = task.get('company') or companies.get(o.get('CompanyId'))
     # DB values win for deadlines; urgency time falls back to task creation
@@ -150,10 +176,19 @@ for ct in rows('CargoTasks.csv'):
 
 # ---- normalise ------------------------------------------------------------
 out_tasks = []
+dropped_orders = set()
 used_locs, used_users, used_flights = set(), set(), set()
 for t in tasks.values():
     if t['from'] not in locations or t['to'] not in locations or t.get('flight') in test_flights:
         continue
+    # log-only orders the DB never had (test orders on Mon 21 with made-up ULD codes)
+    if t['order'] not in orders:
+        dropped_orders.add(t.get('orderNo'))
+        continue
+    # removed from an order that still exists, with no cancellation logged
+    if not t.get('in_db') and t['order'] in orders and t['id'] in removed_at and not t.get('removed'):
+        if not any(e[1] in ('delivered', 'cancelled') for e in t['events']):
+            t['events'].append([removed_at[t['id']], 'cancelled', None])
     ev = sorted(t['events'], key=lambda e: e[0])
     # collapse consecutive duplicates
     clean = []
@@ -198,5 +233,6 @@ js = json.dumps(data, separators=(',', ':'))
 open(os.path.join(OUT, 'replay.json'), 'w').write(js)
 open(os.path.join(OUT, 'replay.js'), 'w').write('window.REPLAY_DATA=' + js + ';\n')
 c = collections.Counter((t['full'], t['ev'][-1][1]) for t in out_tasks)
+print('left out log-only orders not in TransportOrders.csv:', ', '.join('#' + str(n) for n in sorted(dropped_orders, key=lambda x: int(x or 0))))
 print(len(out_tasks), 'tasks,', len(data['drivers']), 'drivers,', len(data['locations']), 'locations,', len(data['flights']), 'flights')
 print(c)
