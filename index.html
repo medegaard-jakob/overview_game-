@@ -445,23 +445,20 @@ function drawBackground() {
   g.font = FONT(8, 700); g.textAlign = 'left'; g.fillStyle = '#e1dacb';
   g.fillText('T1 BAGGAGE HALL', 18, 7);
   g.textAlign = 'center';
-  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const bagCols = ['#c2553f', '#3f6fc2', '#2f2f35', '#8a5bc2', '#d9a13b', '#4a8f57'];
   hall.forEach(l => {
     g.fillStyle = '#1a1f27'; g.fillRect(l.x - 7, 89.5, 14, 7);
     g.fillStyle = C.paint; g.fillRect(l.x - 7.6, 89.5, .7, 7); g.fillRect(l.x + 6.9, 89.5, .7, 7);
     if (l.type === 'Chute') {
-      rr(g, l.x - 19, 19, 38, 11, 5.5); g.fillStyle = '#26282c'; g.fill();
-      rr(g, l.x - 17, 21, 34, 7, 3.5); g.fillStyle = '#4b4843'; g.fill();
-      for (let i = 0; i < 5; i++) {       // bags riding the make-up belt
-        rr(g, l.x - 14 + i * 6 + rnd() * 2, 21.8, 3.6, 3 + rnd() * 1.6, 1);
-        g.fillStyle = bagCols[(rnd() * bagCols.length) | 0]; g.fill();
-      }
-      g.font = FONT(7); g.fillStyle = '#e6dfcf'; g.fillText(l.label, l.x, 33);
+      // bank name sign
+      g.font = FONT(12, 700);
+      const w = Math.min(66, g.measureText(l.label).width + 14);
+      rr(g, l.x - w / 2, 20, w, 18, 4); g.fillStyle = '#1b2029'; g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = .7; g.stroke();
+      g.fillStyle = '#f3ecdc'; g.fillText(l.label, l.x, 23);
     } else {
       rr(g, l.x - 38, 18, 76, 70, 4); g.fillStyle = 'rgba(0,0,0,.18)'; g.fill();
       g.setLineDash([2, 2]); g.strokeStyle = 'rgba(242,194,48,.55)'; g.lineWidth = .7; g.stroke(); g.setLineDash([]);
-      g.font = FONT(7); g.fillStyle = C.paint; g.fillText(l.label, l.x, 21);
+      g.font = FONT(9, 700); g.fillStyle = C.paint; g.fillText(l.label, l.x, 22);
     }
   });
   // soft vignette
