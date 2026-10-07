@@ -1,6 +1,6 @@
 """Check that the replay depicts the raw export correctly.
 
-Usage: python3 tools/validate.py <path-to-extracted-Data-folder> [--report validation-report.md] [--no-page] [--page iso.html]
+Usage: python3 tools/validate.py <path-to-extracted-Data-folder> [--report validation-report.md] [--no-page] [--page classic.html]
 
 Expected values are recomputed from the raw CSV export (CargoTasks, TransportOrders, Locations,
 Flights, users, Companies). They do not come from data/replay.json, so a bug in build_data.py or
@@ -25,7 +25,7 @@ REPORT = sys.argv[sys.argv.index('--report') + 1] if '--report' in sys.argv else
 if REPORT in args:
     args.remove(REPORT)
 RUN_PAGE = '--no-page' not in sys.argv
-PAGE = sys.argv[sys.argv.index('--page') + 1] if '--page' in sys.argv else 'index.html'   # or iso.html
+PAGE = sys.argv[sys.argv.index('--page') + 1] if '--page' in sys.argv else 'index.html'   # or classic.html
 if PAGE in args:
     args.remove(PAGE)
 TOL = 120          # seconds allowed between log timestamps and DB timestamps
