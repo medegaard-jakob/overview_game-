@@ -12,7 +12,14 @@ Open `index.html` in a browser. It loads `data/replay.js`.
 - **`classic.html`: pixel view.** The original top-down game-style view with a drivers panel, day summary,
   hourly chart and order log.
 
-Both views share the same replay logic, and the validator checks either one.
+- **`map.html`: Apron Map** (prototype). The 3D view on the real Heathrow layout: the T1 baggage hall,
+  Terminal 2A and the 2B pier, with every stand at its published position and heading. Stands in use on the
+  shown day (for the chosen organisation) are drawn in yellow with planes and ULDs. The rest are faint
+  outlines. Tugs drive a simplified airside road network, so travel times follow real distances.
+  The layout comes from `data/map_layout.js`, built by `tools/build_map_layout.py` from the UK AIP chart
+  AD 2-EGLL-2-7 (stand coordinate table and terminal outlines). The chart itself is not stored.
+
+All views share the same replay logic, and the validator checks any of them (`--page map.html`).
 
 On the map:
 - **Tugs** are coloured by driver status: assigned, to pickup, full run, empty run, idle.
