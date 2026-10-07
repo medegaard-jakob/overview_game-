@@ -5,6 +5,10 @@ built from a GHS task-core data export (21–25 Sep 2026).
 
 Open `index.html` in a browser. It loads `data/replay.js`.
 
+`iso.html` is the same replay in a second style: a light isometric 3D apron with floating cards (KPIs, the selected tug,
+order tracking, live lists of tugs, banks and flights). It shares the replay logic with `index.html`; run the validator
+with `--page iso.html` to check it.
+
 - **Tugs** are coloured by driver status: to pickup (no load), full run, empty run, idle.
 - **ULDs**: filled amber = full (bags), outlined teal = empty. They wait at their pickup point, ride on the dolly train, and stay at the stand until the flight's departure.
 - **Drivers** panel shows each driver's logged status, current order and runs completed that day.
