@@ -102,6 +102,24 @@ for k, (x, y) in metres.items():
     else: h = (0.0, -1.0)
     stands[k] = {'x': round(p[0], 1), 'y': round(p[1], 1), 'hx': h[0], 'hy': h[1]}
 
+# ---- L/R positions the chart's table doesn't list: estimate from neighbours on the same pier face ----
+def estimate_split(base):
+    """Place <base>L / <base>R using the average L/R offset of other split stands in the same group."""
+    group = int(base) // 10
+    offs = {'L': [], 'R': []}
+    for k, v in stands.items():
+        m = re.match(r'^(\d+)([LR])$', k)
+        if m and int(m[1]) // 10 == group and m[1] in stands and stands[m[1]]['hx'] == stands[base]['hx']:
+            offs[m[2]].append((v['x'] - stands[m[1]]['x'], v['y'] - stands[m[1]]['y']))
+    for side, lst in offs.items():
+        name = base + side
+        if name in stands or not lst: continue
+        dx = sum(o[0] for o in lst) / len(lst); dy = sum(o[1] for o in lst) / len(lst)
+        b = stands[base]
+        stands[name] = {'x': round(b['x'] + dx, 1), 'y': round(b['y'] + dy, 1), 'hx': b['hx'], 'hy': b['hy'], 'estimated': True}
+for base in ('236',):          # 236L / 236R are stands in the GHS data but not in the AIP coordinate table
+    estimate_split(base)
+
 # ---- simplified airside roads (head-of-stand roads and the loop around the piers) ----
 roads = [
     [[780, 40], [780, 800]],                     # along T1 / T2A east faces
