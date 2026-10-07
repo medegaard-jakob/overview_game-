@@ -376,6 +376,8 @@ function travel(len, start, actual) {
   const base = len / SPEED;
   return start - actual > 60 ? Math.max(20, base * 0.35) : base;   // catch up when running late
 }
+// never arrive after the logged time: drivers often accept while already standing at the pickup
+const arriveBy = (dur, start, by) => by && start + dur > by ? Math.max(20, by - start) : dur;
 drivers.forEach(d => {
   // A driver may accept an order and keep it open while doing another, so the tug drives its runs in
   // the order the ULDs were collected. Orders accepted but never collected don't move the tug.
@@ -385,13 +387,13 @@ drivers.forEach(d => {
     const pick = o.from, drop = o.to, next = runs[i + 1];
     let now = Math.max(o.a, t);
     if (pos && pos !== pick) {
-      const p = route(pos, pick), dur = travel(p.len, now, o.a);
+      const p = route(pos, pick), dur = arriveBy(travel(p.len, now, o.a), now, o.c);
       d.segs.push({ k: 'dh', t0: now, t1: now + dur, ra: pos, rb: pick, o }); now += dur; last = [pos, pick];
     } else last = null;
     if (o.c) {
       const cs = Math.max(o.c, now);
       if (cs > now) d.segs.push({ k: 'atpick', t0: now, t1: cs, loc: pick, ra: last?.[0], rb: last?.[1], o });
-      const p = route(pick, drop), dur = travel(p.len, cs, o.c);
+      const p = route(pick, drop), dur = arriveBy(travel(p.len, cs, o.c), cs, o.d);
       o.vc = cs;
       d.segs.push({ k: 'carry', t0: cs, t1: cs + dur, ra: pick, rb: drop, o }); now = cs + dur;
       // wait at the drop-off until the delivery is confirmed, unless the next run's collection comes first

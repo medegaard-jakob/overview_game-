@@ -38,7 +38,8 @@ report. You do not change code or data unless the person who called you asks you
    - run `node tools/snapshot.js index.html <req.json> <out.json>` with one moment between
      collection and delivery and one just after delivery. Confirm the driver shows a Full/Empty run
      with the right order, and that the ULDs then appear at the drop-off.
-5. Check the modelling rules the script does not cover yet, against raw rows (use
+5. The script now checks full ULDs at the banks, ULD piles at the stands and (for `--page map.html`) that every
+   stand has a map position. Still check the modelling rules it does not cover yet, against raw rows (use
    `window.apronDebug.snapshot(t, org)` via tools/snapshot.js, whose `piles` field gives full/empty
    ULDs per location name):
    - **Banks:** an empty ULD delivered to a bank turns full when the next full ULD at that bank

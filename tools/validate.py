@@ -57,6 +57,7 @@ def fmt(t):
 # ---------------- raw export ----------------
 companies = {c['Id']: c['Name'] for c in rows('Companies.csv')}
 locs = {l['Id']: l for l in rows('Locations.csv')}
+locs_by_name = {l['Name']: l for l in locs.values()}
 users = {u['Id']: u for u in rows('users.csv')}
 orders = {o['Id']: o for o in rows('TransportOrders.csv')}
 cargos = {c['Id']: c for c in rows('Cargos.csv')}
@@ -328,8 +329,68 @@ if RUN_PAGE:
     check('B', 'Planes on stand follow the arrival/departure rule', len(bad), len(snaps), '{bad} mismatches', bad)
     check('B', 'Flights known only from the flight event logs', len(set(logonly)), len(snaps),
           '{bad} planes come from FlightCreated/Updated logs, not the Flights.csv snapshot', sorted(set(logonly)), warn_only=True)
+    # B6 ULD piles, rebuilt from the raw rows. Full ULDs wait at a bank from creation until collected
+    # (collection lies between DB accept and finish); delivered ULDs stay at a stand until their own
+    # flight leaves (max 3 h, 45 min if unknown). PILE_TOL allows for tugs still catching up.
+    PILE_TOL = 180
+    hist_first = {}
+    for h in rows('CargoTaskHistory.csv'):
+        a = ts(h['HistoryCreatedAt']); hist_first[h['CargoTaskId']] = min(a, hist_first.get(h['CargoTaskId'], a))
+    ct_rows = {c['Id']: c for c in rows('CargoTasks.csv')}
+    dep = {fid: ts(f['EstimatedTimeOfDeparture']) or ts(f['ScheduledTimeOfDeparture']) for fid, f in flights.items()}
+    chute_names = {l['Name'] for l in locs.values() if l['LocationType'] == 'Chute'}
+    bad_b, bad_s, nb, ns = [], [], 0, 0
+    for snap in snaps:
+        if snap['org'] != 'all':
+            continue
+        T = snap['t']
+        lo, hi = collections.Counter(), collections.Counter()      # definitely / possibly present
+        for t in raw.values():
+            c = ct_rows[t['id']]
+            if t['pickup'] in chute_names:
+                created_def = hist_first.get(t['id'])
+                created_pos = min(x for x in (created_def, ts(orders.get(t['order'], {}).get('CreatedAt')), t['start'], t['finish']) if x) if (created_def or t['start'] or t['finish'] or orders.get(t['order'])) else None
+                if created_pos is None: continue
+                if t['status'] != 'Cancelled' and created_def and created_def <= T - PILE_TOL and t['start'] and T + PILE_TOL < t['start']:
+                    lo[t['pickup']] += 1
+                if created_pos <= T + PILE_TOL and (not t['finish'] or T - PILE_TOL < t['finish']):
+                    hi[t['pickup']] += 1
+            drop = locs.get(c['DropOffLocationId'], {})
+            if drop.get('LocationType') == 'FlightStand' and t['status'] == 'Delivered' and t['finish']:
+                F, out = t['finish'], dep.get(t['flight'])
+                leave = min(out, F + 3 * 3600) if out and out > F else F + 45 * 60
+                leave_max = leave if t['flight'] in dep else F + 3 * 3600      # flight only in the logs
+                if F <= T - PILE_TOL and T + PILE_TOL < leave:
+                    lo[drop['Name']] += 1
+                if F <= T + PILE_TOL and T - PILE_TOL < leave_max:
+                    hi[drop['Name']] += 1
+        for name in set(lo) | set(hi) | set(snap['piles']):
+            is_bank = name in chute_names
+            if not is_bank and locs_by_name.get(name, {}).get('LocationType') != 'FlightStand':
+                continue
+            got = snap['piles'].get(name, {'full': 0, 'empty': 0})
+            got = got['full'] if is_bank else got['full'] + got['empty']
+            if is_bank: nb += 1
+            else: ns += 1
+            if not (lo[name] <= got <= hi[name]):
+                (bad_b if is_bank else bad_s).append(f"{fmt(T)} {name}: page {got}, raw {lo[name]}..{hi[name]}")
+    check('B', 'Full ULDs waiting at the banks', len(bad_b), nb, '{bad} of {total} bank readings outside the raw range', bad_b)
+    check('B', 'ULDs left at the stands', len(bad_s), ns, '{bad} of {total} stand readings outside the raw range', bad_s)
+
     check('B', 'Two flights on one stand at the same time (data)', len(set(overlap)), len(snaps),
           '{bad} overlapping stand allocations; the page can only draw one plane per stand', sorted(set(overlap)), warn_only=True)
+
+# ---------------- C. pages that draw the real layout ----------------
+if PAGE == 'map.html':
+    lay_txt = open(os.path.join(ROOT, 'data', 'map_layout.js')).read()
+    layout_stands = json.loads(lay_txt[lay_txt.index('=') + 1:].strip().rstrip(';'))['stands']
+    wanted = {l['Name'] for l in locs.values() if l['LocationType'] == 'FlightStand'} | {l['name'] for l in rloc.values() if l['type'] == 'FlightStand'}
+    bad = sorted(wanted - set(layout_stands))
+    check('C', 'Every stand has a position on the map', len(bad), len(wanted),
+          '{bad} of {total} stands in Locations.csv / replay.json have no entry in data/map_layout.js', bad)
+    est = sorted(k for k, v in layout_stands.items() if v.get('estimated') and k in wanted)
+    check('C', 'Stand positions estimated (not in the AIP table)', len(est), len(wanted),
+          '{bad} stands placed from the L/R pattern of their neighbours', est, warn_only=True)
 
 # ---------------- report ----------------
 icon = {'PASS': '✅', 'WARN': '⚠️', 'FAIL': '❌'}
