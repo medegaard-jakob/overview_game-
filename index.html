@@ -3,217 +3,204 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Baggage Apron Replay</title>
+<title>Apron Control Room</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
 <style>
-/* Layout: control-room screen. Pixel apron (canvas) is the hero, driver roster to the right,
-   hourly throughput strip underneath doubles as the time scrubber.
-   Single dark look on purpose: apron under floodlights. */
+/* Layout: an isometric apron fills the screen; white cards float over it (KPIs top-left, selected
+   tug top-right, order tracking bottom-left, live lists bottom-right, time scrubber along the bottom).
+   Single light look on purpose, like a daytime operations view. */
 :root {
-  --ground: #131922;
-  --panel: #1a2230;
-  --line: #2a3444;
-  --ink: #e9e4d6;
-  --muted: #8e9aac;
-  --paint: #f2c230;   /* apron paint */
-  --full: #ffb238;    /* loaded ULD run */
-  --empty: #4fd1c5;   /* empty ULD run */
-  --pickup: #9db0ff;  /* driving to pickup, no load */
-  --idle: #7d8793;
-  --alert: #ff6b5e;
-  --f-display: "Pixelify Sans", "Nunito", system-ui, sans-serif;
-  --f-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --f-num: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;   /* numbers: distinct 3/8, 0/O */
-  color-scheme: dark;
+  --sky: #eaf0f7;
+  --card: #ffffff;
+  --ink: #172033;
+  --muted: #677489;
+  --line: #e2e8f0;
+  --brand: #2563eb;      /* tug blue, roof blue */
+  --full: #f59e0b;       /* loaded ULD run */
+  --empty: #0d9488;      /* empty ULD run */
+  --pickup: #3b82f6;     /* driving to pickup */
+  --assigned: #8b93f8;
+  --idle: #94a3b8;
+  --ok: #16a34a;
+  --alert: #e5484d;
+  --f: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { margin: 0; }
-body {
-  background: var(--ground);
-  color: var(--ink);
-  font: 13.5px/1.45 var(--f-body); font-variant-numeric: tabular-nums;
-  padding-inline: 16px;
-  padding-block: 14px 28px;
+html, body { margin: 0; height: 100%; }
+body { background: var(--sky); color: var(--ink); font: 14px/1.45 var(--f); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+button, select { font: inherit; color: inherit; }
+button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* top bar */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 10px 16px; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -.01em; margin-right: auto; }
+.brand svg { flex: none; }
+.brand small { display: block; font-weight: 500; font-size: 11.5px; color: var(--muted); letter-spacing: 0; }
+.chip { display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+.chip select { border: 0; background: transparent; font-weight: 600; padding: 2px; }
+.badge { font-weight: 800; font-size: 11px; color: #fff; background: var(--brand); border-radius: 7px; padding: 3px 6px; }
+.live { background: #ecfdf3; border-color: #c9f2d7; color: #11753a; font-weight: 700; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(22,163,74,.18); }
+.live.paused { background: #f1f5f9; border-color: var(--line); color: var(--muted); }
+.live.paused .dot { background: var(--idle); box-shadow: none; }
+.btn { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 7px 12px; font-weight: 600; cursor: pointer; }
+.btn:hover { border-color: #c5cfdc; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; min-width: 78px; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; background: #eef2f7; border-radius: 11px; }
+.seg button { border: 0; background: transparent; border-radius: 8px; padding: 5px 11px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(23,32,51,.12); }
+.link { color: var(--brand); font-weight: 700; text-decoration: none; }
+
+/* stage */
+.stage { position: relative; height: calc(100vh - 62px); min-height: 640px; overflow: hidden; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+#map.dragging { cursor: grabbing; }
+.float { position: absolute; z-index: 2; }
+.card { background: var(--card); border: 1px solid rgba(226,232,240,.9); border-radius: 16px; box-shadow: 0 8px 28px rgba(23,32,51,.08), 0 1px 2px rgba(23,32,51,.05); }
+.kpis { top: 14px; left: 14px; display: grid; grid-template-columns: repeat(4, minmax(0, 205px)); gap: 10px; }
+.kpi { padding: 12px 14px; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 2px 12px; align-items: center; }
+.kpi .ic { grid-row: span 3; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
+.kpi .l { font-size: 12.5px; font-weight: 600; }
+.kpi b { font-size: 24px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.kpi b small { font-size: 12px; font-weight: 700; color: var(--ok); margin-left: 6px; letter-spacing: 0; }
+.kpi .s { font-size: 11.5px; color: var(--muted); }
+.ctrls { top: 14px; right: 384px; display: grid; padding: 4px; gap: 2px; }
+.ctrls button { width: 38px; height: 38px; border: 0; background: transparent; border-radius: 10px; cursor: pointer; display: grid; place-items: center; color: #334155; }
+.ctrls button:hover { background: #f1f5f9; }
+.ctrls hr { border: 0; border-top: 1px solid var(--line); margin: 3px 4px; }
+
+.detail { top: 14px; right: 14px; width: 356px; padding: 16px; display: grid; gap: 12px; }
+.dhead { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.avatar { width: 48px; height: 48px; border-radius: 12px; background: #eef4ff; display: grid; place-items: center; }
+.eyebrow { font-size: 11px; font-weight: 700; color: var(--brand); letter-spacing: .06em; text-transform: uppercase; }
+.dname { font-size: 20px; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; }
+.dsub { font-size: 12.5px; color: var(--muted); }
+.ibtns { display: flex; gap: 6px; }
+.ibtn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; cursor: pointer; color: #334155; }
+.state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: #3b475b; }
+.pill { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 8px; white-space: nowrap; }
+.pbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.track { height: 6px; background: #edf1f6; border-radius: 99px; overflow: hidden; }
+.track i { display: block; height: 100%; border-radius: 99px; background: var(--ok); }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); border-top: 1px solid var(--line); }
+.kv span, .kv strong { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.kv span { color: var(--muted); }
+.kv strong { text-align: right; font-weight: 700; overflow-wrap: anywhere; }
+.kv strong a, .kv strong.blue { color: var(--brand); }
+.ub { font-size: 10.5px; font-weight: 800; letter-spacing: .05em; color: #fff; background: var(--alert); border-radius: 6px; padding: 2px 6px; }
+
+.tracking { left: 14px; bottom: 62px; width: min(820px, calc(100% - 520px)); padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr); gap: 16px; align-items: center; }
+.th { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.th h2 { margin: 0; font-size: 15px; font-weight: 800; display: flex; gap: 8px; align-items: center; }
+.th span { font-size: 12px; color: var(--muted); }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); position: relative; }
+.steps::before { content: ""; position: absolute; left: 12.5%; right: 12.5%; top: 17px; height: 3px; background: var(--line); border-radius: 3px; }
+.steps .fill { position: absolute; left: 12.5%; top: 17px; height: 3px; background: var(--brand); border-radius: 3px; }
+.step { display: grid; justify-items: center; gap: 4px; text-align: center; position: relative; }
+.step i { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #fff; border: 2px solid var(--line); color: #9aa6b8; font-style: normal; }
+.step.done i { background: var(--brand); border-color: var(--brand); color: #fff; }
+.step.now i { background: #fff; border-color: var(--brand); color: var(--brand); box-shadow: 0 0 0 5px rgba(37,99,235,.14); }
+.step.bad i { background: var(--alert); border-color: var(--alert); color: #fff; }
+.step b { font-size: 12.5px; font-weight: 700; }
+.step small { font-size: 11.5px; color: var(--muted); }
+.osum { background: #f6f8fb; border-radius: 12px; padding: 12px 14px; display: grid; gap: 4px; min-width: 0; }
+.osum .n { font-weight: 800; font-size: 15px; }
+.osum .r { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+
+.lists { right: 14px; bottom: 62px; width: 470px; padding: 12px 14px; display: grid; gap: 8px; }
+.tabs { display: flex; align-items: center; gap: 4px; }
+.tabs button { border: 0; background: transparent; border-radius: 9px; padding: 6px 10px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: #eef2f7; color: var(--ink); font-weight: 800; }
+.tabs button em { font-style: normal; color: var(--brand); font-weight: 700; margin-left: 3px; }
+.tabs .site { margin-left: auto; font-size: 12px; color: var(--muted); }
+.rows { display: grid; max-height: 238px; overflow-y: auto; }
+.row { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto 62px 14px; gap: 10px; align-items: center; padding: 8px 4px; border-top: 1px solid var(--line); text-align: left; border-left: 0; border-right: 0; border-bottom: 0; background: transparent; width: 100%; cursor: pointer; }
+.row:hover, .row.sel { background: #f6f8fb; }
+.row .id { font-weight: 800; font-size: 13px; line-height: 1.15; }
+.row .id small { display: block; font-weight: 500; color: var(--muted); font-size: 11px; }
+.row .what { font-size: 13px; color: #3b475b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .num { font-size: 11.5px; color: var(--muted); display: grid; gap: 3px; }
+.row.off { opacity: .55; }
+
+.scrub { left: 0; right: 0; bottom: 0; height: 50px; background: rgba(255,255,255,.88); backdrop-filter: blur(6px); border-top: 1px solid var(--line); }
+#tl { width: 100%; height: 100%; display: block; cursor: ew-resize; touch-action: none; }
+
+.toast { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); }
+
+@media (max-width: 1280px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 190px)); }
+  .tracking { width: calc(100% - 512px); grid-template-columns: minmax(0, 1fr); }
+  .tracking .osum { display: none; }
 }
-.wrap { max-width: 1760px; margin: 0 auto; display: grid; gap: 14px; }
-header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
-h1 { font: 700 22px/1 var(--f-display); letter-spacing: .02em; margin: 0; text-wrap: balance; }
-h1 small { display: block; font: 400 12px/1.4 var(--f-body); color: var(--muted); margin-top: 6px; letter-spacing: 0; }
-.clock { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; }
-.clock .t { font: 800 30px/1 var(--f-num); color: var(--paint); }
-.clock .d { font: 400 13px var(--f-display); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-button, select {
-  font: 500 12px var(--f-body); color: var(--ink); background: var(--panel);
-  border: 1px solid var(--line); border-radius: 7px; padding: 6px 12px; cursor: pointer;
+@media (max-width: 980px) {
+  .stage { height: auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px; overflow: visible; }
+  #map { position: relative; height: 52vh; min-height: 340px; margin: 0 -16px; width: calc(100% + 32px); }
+  .float { position: static; width: auto; }
+  .kpis { order: -1; margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ctrls { display: none; }
+  .tracking { width: auto; grid-template-columns: minmax(0, 1fr); }
+  .tracking .osum { display: grid; }
+  .scrub { height: 56px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 }
-button:hover, select:hover { border-color: var(--muted); }
-button:focus-visible, select:focus-visible, .drv:focus-visible { outline: 2px solid var(--paint); outline-offset: 1px; }
-button.primary { background: var(--paint); color: #1a1406; border-color: var(--paint); font-weight: 600; min-width: 74px; }
-button[aria-pressed="true"] { border-color: var(--paint); color: var(--paint); }
-.seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; }
-.seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: 7px; }
-.seg button:hover { background: #232d3d; }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--ground); font-weight: 700; }
-.label { font: 500 11px var(--f-display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-
-.main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
-@media (max-width: 980px) { .main { grid-template-columns: minmax(0, 1fr); } }
-.stage { position: relative; background: #0d1117; border: 1px solid var(--line); border-radius: 12px; padding: 6px; min-width: 0; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
-.stage:fullscreen { display: grid; place-items: center; padding: 16px; border-radius: 0; }
-.stage:fullscreen #apron { width: min(100%, calc((100vh - 32px) * var(--ratio, 2))); }
-.mapbtns { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 6px; }
-.mapbtns button { background: rgba(19,25,34,.82); backdrop-filter: blur(4px); font-size: 11.5px; padding: 4px 10px; }
-.leftcol { display: grid; gap: 14px; min-width: 0; }
-.main.wide { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
-.main.wide .leftcol { display: contents; }
-.main.wide .stage, .main.wide .timeline { grid-column: 1 / -1; }
-.main.wide .ticker { max-height: 560px; }
-@media (max-width: 980px) { .main.wide { grid-template-columns: minmax(0, 1fr); } }
-.drv.off .job { display: none; }
-.main.wide aside { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "day drivers" "key drivers"; align-content: start; }
-.main.wide #cardDay { grid-area: day; } .main.wide #cardDrivers { grid-area: drivers; align-self: start; }
-.card { align-content: start; } .main.wide #cardKey { grid-area: key; }
-@media (max-width: 760px) { .main.wide aside { grid-template-columns: minmax(0, 1fr); grid-template-areas: "day" "drivers" "key"; } }
-#apron { display: block; width: 100%; height: auto; border-radius: 8px; cursor: crosshair; }
-
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-@media (max-width: 640px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.stat { background: var(--panel); padding: 8px 12px; display: grid; gap: 2px; }
-.stat b { font: 800 20px/1.1 var(--f-num); font-variant-numeric: tabular-nums; }
-
-aside { display: grid; gap: 14px; min-width: 0; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; min-width: 0; }
-.card h2 { margin: 0; display: flex; justify-content: space-between; align-items: baseline; }
-.roster { display: grid; gap: 4px; }
-.drv {
-  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center;
-  padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; background: transparent;
-  text-align: left; width: 100%; font: inherit; color: inherit;
+@media (max-width: 520px) {
+  .steps b { font-size: 11px; }
+  .row { grid-template-columns: 46px minmax(0, 1fr) auto 14px; }
+  .row .num { display: none; }
 }
-.drv:hover { background: #1f252e; }
-.drv.sel { border-color: var(--paint); background: #1f252e; }
-.drv .tag { font: 800 12.5px var(--f-num); grid-row: span 2; }
-.drv .co { color: var(--muted); font-size: 11px; }
-.drv .job { grid-column: 2 / 4; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.drv .job em { font-style: normal; color: var(--ink); }
-.pill { font: 600 10.5px var(--f-display); letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; white-space: nowrap; color: #11151a; justify-self: end; }
-.drv.off { opacity: .45; }
-
-.urgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.urgrid .ds b { font-size: 19px; }
-.ub { font: 700 9.5px var(--f-display); letter-spacing: .05em; color: #fff; background: var(--alert); border-radius: 99px; padding: 1px 6px; margin-left: 4px; }
-.chip .late { color: var(--alert); font-weight: 800; }
-.daygrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
-.ds { display: grid; gap: 3px; min-width: 0; }
-.ds b { font: 800 24px/1 var(--f-num); }
-.ds small { color: var(--muted); font-size: 11.5px; }
-.bar { height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; }
-.bar i { display: block; height: 100%; border-radius: 99px; }
-.flchips { display: flex; flex-wrap: wrap; gap: 4px; }
-.chip { font-size: 11.5px; padding: 1px 8px; border-radius: 99px; background: #232d3d; white-space: nowrap; }
-.chip { font-family: var(--f-num); font-size: 11px; }
-.chip b { font-weight: 800; }
-.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 11.5px; }
-.legend div { display: flex; gap: 7px; align-items: center; }
-.sw { width: 12px; height: 12px; flex: none; border-radius: 1px; }
-.sw.uldf { background: var(--full); box-shadow: inset 0 -3px #b86f00; }
-.sw.ulde { border: 2px solid var(--empty); background: #0f2322; }
-
-.ticker { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 11.5px; max-height: 320px; overflow-y: auto; }
-.ticker li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 6px; }
-.ticker time { color: var(--muted); font-variant-numeric: tabular-nums; }
-.ticker .v { font-weight: 600; }
-
-.timeline { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px 6px; display: grid; gap: 4px; }
-.timeline .head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; }
-#tl { width: 100%; height: 78px; display: block; cursor: ew-resize; touch-action: none; }
-.days { display: flex; flex-wrap: wrap; gap: 6px; }
-.note { color: var(--muted); font-size: 11.5px; max-width: 95ch; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Baggage Apron Replay
-      <small>T1 baggage hall → Terminal 2 apron stands · ULD transport orders, 21–25 Sep 2026 · UTC</small>
-    </h1>
-    <div class="clock" aria-live="off"><span class="t" id="clockT">--:--</span><span class="d" id="clockD"></span></div>
-    <div class="controls">
-      <button class="primary" id="play" type="button">Pause</button>
-      <label class="label" for="speed">Speed</label>
-      <select id="speed">
-        <option value="10">10×</option>
-        <option value="30">30×</option>
-        <option value="60" selected>60×</option>
-        <option value="180">180×</option>
-        <option value="600">600×</option>
-      </select>
-      <button id="skip" type="button" title="Jump to the next dispatched order">Next order ›</button>
-      <div class="seg" id="org" role="group" aria-label="Organisation"></div>
-    </div>
-  </header>
-
-  <div class="stats" id="stats"></div>
-
-  <div class="main" id="mainTop">
-    <div class="leftcol">
-    <div class="stage" id="stage"><canvas id="apron" aria-label="Pixel map of baggage hall, service roads and aircraft stands with tugs moving ULDs"></canvas>
-      <div class="mapbtns"><button type="button" id="enlarge" aria-pressed="false">Enlarge map</button><button type="button" id="fs">Full screen</button></div>
-    </div>
-    <section class="timeline">
-      <div class="head">
-        <span class="label">ULDs delivered per hour · <span style="color:var(--full)">full</span> / <span style="color:var(--empty)">empty</span> · drag to scrub</span>
-        <div class="days" id="days"></div>
-      </div>
-      <canvas id="tl"></canvas>
-    </section>
-    <section class="card">
-      <h2><span class="label">Order log</span><span class="label">latest first</span></h2>
-      <ul class="ticker" id="ticker"></ul>
-    </section>
-    </div>
-    <aside>
-      <section class="card" id="cardDay">
-        <h2><span class="label">Day summary</span><span class="label" id="dayName"></span></h2>
-        <div class="daygrid" id="daygrid"></div>
-        <div class="urgrid" id="urgrid"></div>
-        <div class="flchips" id="flchips"></div>
-      </section>
-      <section class="card" id="cardDrivers">
-        <h2><span class="label">Drivers</span><span class="label" id="onShift"></span></h2>
-        <div class="roster" id="roster"></div>
-      </section>
-      <section class="card" id="cardKey">
-        <h2><span class="label">Key</span></h2>
-        <div class="legend">
-          <div><span class="sw uldf"></span>Full ULD (bags)</div>
-          <div><span class="sw ulde"></span>Empty ULD</div>
-          <div><span class="sw" style="background:var(--full)"></span>Full run</div>
-          <div><span class="sw" style="background:var(--empty)"></span>Empty run</div>
-          <div><span class="sw" style="background:var(--pickup)"></span>To pickup, no load</div>
-          <div><span class="sw" style="background:var(--idle)"></span>Idle / waiting</div>
-          <div><span class="sw" style="background:var(--pickup);opacity:.6"></span>Assigned, not started</div>
-          <div><span class="sw" style="background:var(--full);box-shadow:inset -4px 4px 0 -2px var(--alert)"></span>Urgent ULD (red dot)</div>
-          <div><span class="sw" style="border:2px solid var(--alert)"></span>Overdue, still waiting</div>
-          <div><span class="sw" style="background:var(--full);box-shadow:inset 0 -3px var(--alert)"></span>Delivered late</div>
-          <div><span class="ub" style="margin:0">URGENT</span>Tug on an urgent run</div>
-        </div>
-        <p class="note">Positions are simulated: tugs drive the map at a steady speed between the real status
-      timestamps (accepted → collected → delivered). When a driver confirmed a step before the tug could
-      physically get there, the animation catches up; the panel always shows the logged status.
-      ULDs leaving Empty Can Storage count as empty, everything leaving a chute or Early Can Storage counts as full.</p>
-
-      </section>
-    </aside>
+<header class="top">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><path d="M17 2 31 9v16L17 32 3 25V9z" fill="#2563eb"/><path d="M17 2 31 9 17 16 3 9z" fill="#60a5fa"/><path d="M17 16v16L3 25V9z" fill="#1d4ed8"/></svg>
+    <div>Apron Control Room<small>T1 baggage hall → T2 apron · UTC · <a class="link" href="classic.html">Classic view</a></small></div>
   </div>
+  <label class="chip" for="day"><span class="badge">T1</span><select id="day" aria-label="Jump to day"></select></label>
+  <div class="seg" id="org" role="group" aria-label="Organisation"></div>
+  <span class="chip live" id="live"><span class="dot"></span><span id="liveTxt">Replay</span> <span id="clock">--:--</span></span>
+  <button class="btn primary" id="play" type="button">Pause</button>
+  <select class="btn" id="speed" aria-label="Replay speed">
+    <option value="10">10×</option><option value="30">30×</option><option value="60" selected>60×</option><option value="180">180×</option><option value="600">600×</option>
+  </select>
+  <button class="btn" id="skip" type="button">Next order ›</button>
+</header>
 
+<main class="stage" id="stage">
+  <canvas id="map" aria-label="Isometric map of the baggage hall, service roads and aircraft stands with tugs moving ULDs"></canvas>
 
-</div>
+  <section class="float kpis" id="kpis" aria-label="Today so far"></section>
+
+  <nav class="float card ctrls" aria-label="Map controls">
+    <button type="button" id="zin" title="Zoom in"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 3v12M3 9h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button type="button" id="zout" title="Zoom out"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 9h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <hr>
+    <button type="button" id="follow" title="Follow selected tug" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="5"/><path d="M9 1v3M9 14v3M1 9h3M14 9h3"/></svg></button>
+    <button type="button" id="home" title="Reset view (press again for the whole apron)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8.5 9 3l6 5.5V15H3z"/></svg></button>
+  </nav>
+
+  <aside class="float card detail" id="detail" aria-live="polite"></aside>
+
+  <section class="float card tracking" aria-label="Order tracking">
+    <div>
+      <div class="th"><h2><svg width="20" height="20" viewBox="0 0 20 20"><rect x="1" y="6" width="11" height="8" rx="1.5" fill="#2563eb"/><path d="M12 9h4l3 3v2h-7z" fill="#60a5fa"/><circle cx="5" cy="15.5" r="2" fill="#172033"/><circle cx="15" cy="15.5" r="2" fill="#172033"/></svg>Order tracking</h2><span id="trkHead"></span></div>
+      <div class="steps" id="steps"></div>
+    </div>
+    <div class="osum" id="osum"></div>
+  </section>
+
+  <section class="float card lists" aria-label="Live lists">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="rows" id="rows" role="tabpanel"></div>
+  </section>
+
+  <div class="float scrub"><canvas id="tl" aria-label="ULDs delivered per hour, drag to move through time"></canvas></div>
+</main>
 
 <script src="data/replay.js"></script>
 <script>
@@ -222,13 +209,12 @@ aside { display: grid; gap: 14px; min-width: 0; }
 const D = window.REPLAY_DATA;
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const C = {
-  paint: css('--paint'), full: css('--full'), empty: css('--empty'), pickup: css('--pickup'),
-  idle: css('--idle'), alert: css('--alert'), ink: css('--ink'), muted: css('--muted'),
-  tarmac: '#23282f', tarmac2: '#262b33', road: '#1a1e24', hall: '#2e3440', hallRoof: '#3a4150',
-  wall: '#5b6475', belt: '#44403a', plane: '#dfe3e9', planeShade: '#9aa4b1',
+  paint: '#eab308', full: css('--full'), empty: css('--empty'), pickup: css('--pickup'), assigned: css('--assigned'),
+  idle: css('--idle'), alert: css('--alert'), ink: css('--ink'), muted: css('--muted'), brand: css('--brand'), ok: css('--ok'),
 };
-const TAIL = { UA: '#3b6fd8', EI: '#27a56b' };
+const TAIL = { UA: '#1d4ed8', EI: '#16a34a' };
 
+// ===== shared replay logic: same as classic.html (tools/validate.py checks both pages) =====
 // ---------- world layout (logical pixels) ----------
 const W = 640;
 let H = 306;          // shrinks to one stand row when a day has 12 stands or fewer
@@ -476,24 +462,6 @@ orders.forEach(o => {
 });
 log.sort((a, b) => a.t - b.t);
 
-// ---------- rendering: logical coordinates drawn at high resolution ----------
-const cv = document.getElementById('apron'), ctx = cv.getContext('2d');
-cv.width = W * 2; cv.height = H * 2;
-const bg = document.createElement('canvas');
-let S = 0;
-const NUMF = (n, w = 700) => `${w} ${n}px "JetBrains Mono", ui-monospace, Menlo, monospace`;   // anything with digits
-const FONT = (n, w = 500) => `${w} ${n}px "Pixelify Sans", "Nunito", system-ui, sans-serif`;
-function rr(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
-let bgDirty = true, layoutKey = null;
-function sizeApron() {
-  const w = cv.clientWidth || W;
-  const s = Math.max(2, Math.min(4, Math.ceil(w * (window.devicePixelRatio || 1) / W)));
-  if (s !== S || cv.height !== H * s) {
-    S = s; cv.width = bg.width = W * S; cv.height = bg.height = H * S; bgDirty = true;
-    cv.parentElement.style.setProperty('--ratio', W / H);
-  }
-  if (bgDirty) { bgDirty = false; drawBackground(); }
-}
 // Stands relevant to the shown day and organisation: used by a ULD task that is active that day
 // (including ULDs still waiting at the stand), or holding a plane that day.
 function relevantStands(d0) {
@@ -512,180 +480,327 @@ function relevantStands(d0) {
   });
   return allStands.filter(l => keep.has(l.id));
 }
-function glow(g, x, y, r, rgb, a) {
-  const gr = g.createRadialGradient(x, y, 0, x, y, r);
-  gr.addColorStop(0, `rgba(${rgb},${a})`); gr.addColorStop(1, `rgba(${rgb},0)`);
-  g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+
+// ===== end of shared replay logic =====
+
+C.pickup = css('--pickup');
+function statusStyle(st) {           // light-theme pill colours per status
+  switch (st.k) {
+    case 'dh': return ['To pickup', '#e8f0fe', '#1d4ed8', C.pickup];
+    case 'atpick': return ['Loading', '#e8f0fe', '#1d4ed8', C.pickup];
+    case 'carry': return st.o.full ? ['Full run', '#fff4e0', '#b45309', C.full] : ['Empty run', '#e0f5f2', '#0f766e', C.empty];
+    case 'atdrop': return ['Unloading', st.o.full ? '#fff4e0' : '#e0f5f2', st.o.full ? '#b45309' : '#0f766e', st.o.full ? C.full : C.empty];
+    case 'assigned': return ['Assigned', '#eef0ff', '#4f46e5', C.assigned];
+    case 'idle': return ['Idle', '#f1f5f9', '#475569', C.idle];
+    default: return ['Off shift', '#f1f5f9', '#94a3b8', '#cbd5e1'];
+  }
 }
-function drawBackground() {
-  const g = bg.getContext('2d');
-  g.setTransform(S, 0, 0, S, 0, 0);
-  let gr = g.createLinearGradient(0, 0, 0, H);
-  gr.addColorStop(0, '#2c3440'); gr.addColorStop(1, '#222932');
-  g.fillStyle = gr; g.fillRect(0, 0, W, H);
-  // concrete slab joints
-  g.fillStyle = 'rgba(0,0,0,.14)';
-  for (let x = 16; x < W; x += 32) g.fillRect(x, ROAD.r1 + 7, .5, H);
-  for (let y = ROAD.r1 + 40; y < H; y += 32) g.fillRect(0, y, W, .5);
-  // stands: pad, lead-in line, stop bar, painted number
-  g.textAlign = 'center'; g.textBaseline = 'top';
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const fmtT = t => new Date(t * 1000).toISOString().slice(11, 16);
+const fmtD = t => new Date(t * 1000).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
+const dayStart = t => Math.floor(t / 86400) * 86400;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function shade(hex, f) {             // f < 0 darker, f > 0 lighter
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  const m = v => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f);
+  return `rgb(${m(r)},${m(g)},${m(b)})`;
+}
+
+// ---------- isometric camera ----------
+const cv = $('map'), ctx = cv.getContext('2d');
+// dimetric camera: the long hall runs mostly left to right, the apron comes towards the viewer
+const XA = .95, XB = .30, YA = .55, YB = .42, KZ = 1.05;
+const cam = { s: 1, ox: 0, oy: 0, fitted: false, follow: false };
+let cw = 0, ch = 0, dpr = 1;
+const P = (x, y, z = 0) => [cam.ox + cam.s * (x * XA - y * YA), cam.oy + cam.s * (x * XB + y * YB - z * KZ)];
+function ground(z = 0) { ctx.setTransform(dpr * cam.s * XA, dpr * cam.s * XB, -dpr * cam.s * YA, dpr * cam.s * YB, dpr * cam.ox, dpr * (cam.oy - cam.s * z * KZ)); }
+function screen() { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+function sizeMap() {
+  dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (w === cw && h === ch) return;
+  cw = w; ch = h; cv.width = w * dpr; cv.height = h * dpr;
+  if (!cam.fitted) fit();
+}
+function fit() {
+  // fit the world (plus building height) into the space between the floating cards
+  const narrow = cw < 980;
+  const top = narrow ? 12 : 118, bottom = narrow ? 12 : 250, left = narrow ? 8 : 16, right = narrow ? 8 : cw > 1280 ? 390 : 24;
+  const xs = [], ys = [];
+  [[-30, -10, 0], [W + 30, -10, 0], [W + 30, H + 20, 0], [-30, H + 20, 0], [100, 4, 44], [540, 4, 44]].forEach(([x, y, z]) => {
+    xs.push(x * XA - y * YA); ys.push(x * XB + y * YB - z * KZ);
+  });
+  const bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys);
+  cam.s = Math.min((cw - left - right) / bw, (ch - top - bottom) / bh);
+  cam.ox = left + (cw - left - right - bw * cam.s) / 2 - Math.min(...xs) * cam.s;
+  cam.oy = top + (ch - top - bottom - bh * cam.s) / 2 - Math.min(...ys) * cam.s;
+  cam.fitted = true;
+  if (!overview) {                     // start close to the action, like a control-room camera
+    const fx0 = narrow ? W * .3 : W * .36, [fx, fy] = P(fx0, 110, 0);
+    zoomAt(narrow ? 2.1 : 1.3, fx, fy);
+    const [gx, gy] = P(fx0, 110, 0);
+    cam.ox += left + (cw - left - right) * .5 - gx; cam.oy += top + (ch - top - bottom) * .55 - gy;
+  }
+}
+let overview = false;
+function zoomAt(f, sx = cw / 2, sy = ch / 2) {
+  const s2 = Math.max(.4, Math.min(8, cam.s * f)), k = s2 / cam.s;
+  cam.ox = sx - (sx - cam.ox) * k; cam.oy = sy - (sy - cam.oy) * k; cam.s = s2;
+}
+function centerOn(x, y, z = 0) { const [sx, sy] = P(x, y, z); cam.ox += cw / 2 - sx; cam.oy += ch * .42 - sy; }
+
+// ---------- drawing primitives ----------
+function poly(pts, fill, stroke, lw = 1) {
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+}
+// axis-aligned box: x,y = back-left corner on the ground grid, w along x, d along y, h up
+function box(x, y, z, w, d, h, top, front, side, edge) {
+  poly([P(x, y + d, z), P(x + w, y + d, z), P(x + w, y + d, z + h), P(x, y + d, z + h)], front, edge, .6);
+  poly([P(x + w, y, z), P(x + w, y + d, z), P(x + w, y + d, z + h), P(x + w, y, z + h)], side, edge, .6);
+  poly([P(x, y, z + h), P(x + w, y, z + h), P(x + w, y + d, z + h), P(x, y + d, z + h)], top, edge, .6);
+}
+function rr(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
+
+// ---------- static scenery ----------
+const BLD = { x: 100, y: 4, w: 440, d: 76, h: 40 };
+const YARDS = () => hall.filter(l => l.type !== 'Chute');
+function drawGround() {
+  screen();
+  const g = ctx.createLinearGradient(0, 0, 0, ch); g.addColorStop(0, '#e3eaf3'); g.addColorStop(1, '#eef2f7');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
+  poly([P(-40, -24), P(W + 40, -24), P(W + 40, H + 30), P(-40, H + 30)], '#dde4ed');
+  poly([P(-30, -16), P(W + 30, -16), P(W + 30, H + 22), P(-30, H + 22)], '#e9eef4', '#d3dbe6', 1);
+  ground();
+  // apron concrete with slab joints
+  ctx.fillStyle = '#f5f7fa'; ctx.fillRect(-26, 82, W + 52, H - 62);
+  ctx.strokeStyle = 'rgba(148,163,184,.18)'; ctx.lineWidth = .35;
+  for (let x = -26; x <= W + 26; x += 24) { ctx.beginPath(); ctx.moveTo(x, 118); ctx.lineTo(x, H + 18); ctx.stroke(); }
+  for (let y = 142; y <= H + 18; y += 24) { ctx.beginPath(); ctx.moveTo(-26, y); ctx.lineTo(W + 26, y); ctx.stroke(); }
+  // service roads with dashed centre lines
+  const roads = H > 250 ? [ROAD.r1, ROAD.r2] : [ROAD.r1];
+  roads.forEach(y => {
+    ctx.fillStyle = '#e1e6ed'; ctx.fillRect(-26, y - 7, W + 52, 14);
+    ctx.fillStyle = '#ffffff'; for (let x = -20; x < W + 20; x += 12) { rr(ctx, x, y - .45, 6, .9, .45); ctx.fill(); }
+    ctx.fillStyle = 'rgba(234,179,8,.9)'; ctx.fillRect(-26, y - 7.6, W + 52, .6); ctx.fillRect(-26, y + 7, W + 52, .6);
+  });
+  if (H > 250) CONNECT.forEach(x => { ctx.fillStyle = '#e1e6ed'; ctx.fillRect(x - 5, ROAD.r1 + 7, 10, ROAD.r2 - ROAD.r1 - 14); });
+  else { ctx.fillStyle = '#e8edf3'; ctx.fillRect(-26, ROAD.r2 - 7, W + 52, 12); }
+  // dock apron in front of the hall
+  ctx.fillStyle = '#eef2f6'; ctx.fillRect(BLD.x - 4, 80, BLD.w + 8, 18);
+  ctx.strokeStyle = 'rgba(234,179,8,.9)'; ctx.lineWidth = .55;
+  hall.filter(l => l.type === 'Chute').forEach(l => { ctx.strokeRect(l.x - 14, 81, 28, 15); });
+  // stand boxes
   stands.forEach(l => {
-    const top = l.dy, bottom = l.road === 'r1' ? ROAD.r2 - 9 : H - 2;
-    rr(g, l.x - sp / 2 + 3, top + 3, sp - 6, bottom - top - 4, 3);
-    g.fillStyle = 'rgba(255,255,255,.028)'; g.fill();
-    g.strokeStyle = 'rgba(242,194,48,.2)'; g.lineWidth = .6; g.stroke();
-    g.strokeStyle = 'rgba(242,194,48,.85)'; g.lineWidth = .8;
-    g.beginPath(); g.moveTo(l.x, top + 4); g.lineTo(l.x, top + 50); g.stroke();   // stops above the flight labels
-    rr(g, l.x - 4.5, top + 7.5, 9, 1.3, .65); g.fillStyle = C.paint; g.fill();
-    g.font = NUMF(7); g.fillStyle = 'rgba(242,194,48,.8)'; g.fillText(l.name, l.x, bottom - 10);
+    const bottom = l.road === 'r1' ? ROAD.r2 - 9 : H + 14;
+    ctx.strokeStyle = 'rgba(234,179,8,.95)'; ctx.lineWidth = .7;
+    ctx.strokeRect(l.x - sp / 2 + 3, l.dy + 3, sp - 6, bottom - l.dy - 4);
+    ctx.lineWidth = .6; ctx.beginPath(); ctx.moveTo(l.x, l.dy + 6); ctx.lineTo(l.x, l.dy + 46); ctx.stroke();
+    ctx.fillStyle = 'rgba(234,179,8,.95)'; ctx.fillRect(l.x - 4.5, l.dy + 8, 9, 1);
   });
-  // floodlight pools
-  g.globalCompositeOperation = 'lighter';
-  [[W * .2, ROAD.r1 + 48], [W * .5, ROAD.r1 + 48], [W * .8, ROAD.r1 + 48], [W * .35, ROAD.r2 + 46], [W * .65, ROAD.r2 + 46]]
-    .forEach(([x, y]) => glow(g, x, y, 90, '255,214,150', .07));
-  g.globalCompositeOperation = 'source-over';
-  // service roads
-  [ROAD.r1, ROAD.r2].forEach(y => {
-    g.fillStyle = '#1a1f27'; g.fillRect(0, y - 7, W, 14);
-    g.fillStyle = 'rgba(255,255,255,.035)'; g.fillRect(0, y - 7, W, 1);
-    g.fillStyle = C.paint; g.fillRect(0, y - 7.7, W, .7); g.fillRect(0, y + 7, W, .7);
-    g.fillStyle = 'rgba(233,228,214,.5)';
-    for (let x = 12; x < W - 10; x += 12) { rr(g, x, y - .45, 6, .9, .45); g.fill(); }
+  // can storage yards
+  YARDS().forEach(l => {
+    ctx.fillStyle = '#e4ebe6'; rr(ctx, l.x - 40, 14, 80, 80, 3); ctx.fill();
+    ctx.strokeStyle = 'rgba(100,116,139,.35)'; ctx.setLineDash([2, 1.5]); ctx.lineWidth = .5; ctx.stroke(); ctx.setLineDash([]);
   });
-  CONNECT.forEach(x => { g.fillStyle = '#1a1f27'; g.fillRect(x - 5, ROAD.r1 + 7, 10, ROAD.r2 - ROAD.r1 - 14); });
-  // baggage hall
-  rr(g, 12, 8, W - 20, 91, 6); g.fillStyle = 'rgba(0,0,0,.35)'; g.fill();
-  gr = g.createLinearGradient(0, 3, 0, 93);
-  gr.addColorStop(0, '#3d475a'); gr.addColorStop(1, '#313a4a');
-  rr(g, 10, 3, W - 20, 90, 6); g.fillStyle = gr; g.fill();
-  g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = .8; g.stroke();
-  g.fillStyle = 'rgba(170,196,255,.07)';
-  for (let x = 130; x < W - 110; x += 44) { rr(g, x, 7, 26, 4, 2); g.fill(); }
-  g.fillStyle = '#5a6479'; g.fillRect(10, 90.5, W - 20, 2.5);
-  g.font = FONT(8, 700); g.textAlign = 'left'; g.fillStyle = '#e1dacb';
-  g.fillText('T1 BAGGAGE HALL', 18, 7);
-  g.textAlign = 'center';
-  hall.forEach(l => {
-    g.fillStyle = '#1a1f27'; g.fillRect(l.x - 7, 89.5, 14, 7);
-    g.fillStyle = C.paint; g.fillRect(l.x - 7.6, 89.5, .7, 7); g.fillRect(l.x + 6.9, 89.5, .7, 7);
-    if (l.type === 'Chute') {
-      // bank name sign
-      g.font = NUMF(11, 800);
-      const w = Math.min(66, g.measureText(l.label).width + 14);
-      rr(g, l.x - w / 2, 20, w, 18, 4); g.fillStyle = '#1b2029'; g.fill();
-      g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = .7; g.stroke();
-      g.fillStyle = '#f3ecdc'; g.fillText(l.label, l.x, 23);
-    } else {
-      rr(g, l.x - 38, 18, 76, 70, 4); g.fillStyle = 'rgba(0,0,0,.18)'; g.fill();
-      g.setLineDash([2, 2]); g.strokeStyle = 'rgba(242,194,48,.55)'; g.lineWidth = .7; g.stroke(); g.setLineDash([]);
-      g.font = FONT(9, 700); g.fillStyle = C.paint; g.fillText(l.label, l.x, 22);
-    }
+  screen();
+}
+function drawTree(x, y, r = 9) {
+  const [bx, by] = P(x, y, 0);
+  ctx.fillStyle = 'rgba(15,23,42,.12)'; ctx.beginPath(); ctx.ellipse(bx + 4 * cam.s, by + 1 * cam.s, r * cam.s * 1.1, r * cam.s * .5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#8a6a4a'; ctx.fillRect(bx - .8 * cam.s, by - 7 * cam.s, 1.6 * cam.s, 7 * cam.s);
+  const [cx, cy] = P(x, y, 14);
+  const gr = ctx.createRadialGradient(cx - r * .35 * cam.s, cy - r * .45 * cam.s, 1, cx, cy, r * cam.s);
+  gr.addColorStop(0, '#7fdc9a'); gr.addColorStop(1, '#34a868');
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(cx, cy, r * cam.s * .85, r * cam.s, 0, 0, Math.PI * 2); ctx.fill();
+}
+function drawBuilding() {
+  const { x, y, w, d, h } = BLD, fy = y + d;
+  // front wall with ribbing
+  poly([P(x, fy, 0), P(x + w, fy, 0), P(x + w, fy, h), P(x, fy, h)], '#e9eef5');
+  ctx.strokeStyle = 'rgba(100,116,139,.13)'; ctx.lineWidth = Math.max(.5, cam.s * .35);
+  for (let xx = x + 4; xx < x + w; xx += 5) { const a = P(xx, fy, 1), b = P(xx, fy, h - 1); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); }
+  poly([P(x, fy, 0), P(x + w, fy, 0), P(x + w, fy, 3), P(x, fy, 3)], '#d4dce7');
+  // side wall
+  poly([P(x + w, y, 0), P(x + w, fy, 0), P(x + w, fy, h), P(x + w, y, h)], '#c9d3e0');
+  // sawtooth roof: blue with light ridges
+  poly([P(x, y, h), P(x + w, y, h), P(x + w, fy, h), P(x, fy, h)], C.brand);
+  for (let xx = x + 8; xx < x + w - 6; xx += 36) {
+    poly([P(xx, y + 2, h), P(xx + 14, y + 2, h + 7), P(xx + 14, fy - 2, h + 7), P(xx, fy - 2, h)], '#3b82f6');
+    poly([P(xx + 14, y + 2, h + 7), P(xx + 18, y + 2, h), P(xx + 18, fy - 2, h), P(xx + 14, fy - 2, h + 7)], '#1e40af');
+    poly([P(xx + 14, fy - 2, h), P(xx + 18, fy - 2, h), P(xx + 14, fy - 2, h + 7)], '#1d4ed8');
+  }
+  poly([P(x, fy, h), P(x + w, fy, h), P(x + w, fy, h + 1.5), P(x, fy, h + 1.5)], '#1d4ed8');
+  // dock doors with a peek of cargo inside
+  hall.filter(l => l.type === 'Chute').forEach(l => {
+    poly([P(l.x - 10, fy + .1, 0), P(l.x + 10, fy + .1, 0), P(l.x + 10, fy + .1, 19), P(l.x - 10, fy + .1, 19)], C.brand);
+    poly([P(l.x - 8, fy + .15, 0), P(l.x + 8, fy + .15, 0), P(l.x + 8, fy + .15, 17), P(l.x - 8, fy + .15, 17)], '#5b6a80');
+    poly([P(l.x - 8, fy + .2, 0), P(l.x + 8, fy + .2, 0), P(l.x + 8, fy + .2, 13), P(l.x - 8, fy + .2, 13)], '#7a879a');
+    poly([P(l.x - 5, fy + .25, 0), P(l.x + 5, fy + .25, 0), P(l.x + 5, fy + .25, 7), P(l.x - 5, fy + .25, 7)], '#d9a35c');
   });
-  // soft vignette
-  gr = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, W * .62);
-  gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.35)');
-  g.fillStyle = gr; g.fillRect(0, 0, W, H);
 }
 
 // ---------- sprites ----------
-function uldShape(x, y) {        // AKE container: slanted lower corner
-  ctx.beginPath(); ctx.moveTo(x + .6, y); ctx.lineTo(x + 5.4, y); ctx.quadraticCurveTo(x + 6, y, x + 6, y + .6);
-  ctx.lineTo(x + 6, y + 4); ctx.lineTo(x + 4.4, y + 6); ctx.lineTo(x + .6, y + 6); ctx.quadraticCurveTo(x, y + 6, x, y + 5.4);
-  ctx.lineTo(x, y + .6); ctx.quadraticCurveTo(x, y, x + .6, y); ctx.closePath();
-}
-function drawMarks(x, y, t, T) {
-  if (!t || !t.ev) return;
-  if (overdue(t, T)) {             // past its latest finish time and not delivered: pulsing ring
-    const a = .5 + .35 * Math.sin(performance.now() / 170);
-    ctx.strokeStyle = `rgba(255,107,94,${a})`; ctx.lineWidth = .9; rr(ctx, x - 1.3, y - 1.3, 8.6, 8.6, 2.2); ctx.stroke();
+const ULD = 5.6;
+function drawULD(x, y, z, t, T) {
+  const full = t.full;
+  if (full) box(x, y, z, ULD, ULD, ULD, '#fcd77a', '#f5a623', '#d9861a', 'rgba(120,70,10,.25)');
+  else box(x, y, z, ULD, ULD, ULD, '#f4f7fa', '#dfe5ec', '#c5cfdb', 'rgba(13,148,136,.75)');
+  if (!t.ev) return;
+  const topC = P(x + ULD / 2, y + ULD / 2, z + ULD);
+  if (overdue(t, T)) {
+    const a = .45 + .35 * Math.sin(performance.now() / 170);
+    poly([P(x - .6, y - .6, z + ULD), P(x + ULD + .6, y - .6, z + ULD), P(x + ULD + .6, y + ULD + .6, z + ULD), P(x - .6, y + ULD + .6, z + ULD)], null, `rgba(229,72,77,${a})`, Math.max(1.2, cam.s * .7));
   }
-  if (isUrgent(t, T)) { ctx.fillStyle = C.alert; ctx.beginPath(); ctx.arc(x + 5.6, y + .4, 1.4, 0, Math.PI * 2); ctx.fill(); }
-  if (t.del && T >= t.del && isLate(t)) { ctx.fillStyle = C.alert; rr(ctx, x, y + 6.7, 6, 1.2, .6); ctx.fill(); }
+  if (isUrgent(t, T)) { ctx.fillStyle = C.alert; ctx.beginPath(); ctx.arc(topC[0], topC[1], Math.max(2, cam.s * 1.3), 0, Math.PI * 2); ctx.fill(); }
+  if (t.del && T >= t.del && isLate(t)) poly([P(x, y + ULD, z), P(x + ULD, y + ULD, z), P(x + ULD, y + ULD, z + 1.2), P(x, y + ULD, z + 1.2)], C.alert);
 }
-function drawULD(x, y, full, alpha = 1) {
-  ctx.globalAlpha = alpha * .4; ctx.fillStyle = '#000'; uldShape(x + .7, y + .8); ctx.fill();
-  ctx.globalAlpha = alpha;
-  uldShape(x, y);
-  if (full) {
-    const gr = ctx.createLinearGradient(0, y, 0, y + 6);
-    gr.addColorStop(0, '#ffd27a'); gr.addColorStop(1, '#f09a1c');
-    ctx.fillStyle = gr; ctx.fill();
-    ctx.fillStyle = 'rgba(120,60,0,.45)'; ctx.fillRect(x + 1.2, y + 3.4, 3.8, .5); ctx.fillRect(x + 2.8, y + 1.2, .5, 4.2);
-  } else {
-    ctx.fillStyle = '#17302f'; ctx.fill();
-    ctx.strokeStyle = C.empty; ctx.lineWidth = .8; ctx.stroke();
+function drawTug(x, y, dx, dy, color, moving) {
+  const alongX = dx !== 0 || dy === 0;
+  const L = 8.5, Wd = 5.2, bx = x - (alongX ? L : Wd) / 2, by = y - (alongX ? Wd : L) / 2, w = alongX ? L : Wd, d = alongX ? Wd : L;
+  // shadow
+  ground(); ctx.fillStyle = 'rgba(15,23,42,.16)'; rr(ctx, bx + .8, by + .8, w, d, 1.4); ctx.fill(); screen();
+  // wheels
+  const wc = '#1f2937';
+  [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([i, j]) => {
+    const wx = alongX ? bx + 1 + i * (w - 3) : bx - .6 + i * (w + .2), wy = alongX ? by - .6 + j * (d + .2) : by + 1 + j * (d - 3);
+    box(wx, wy, 0, alongX ? 2 : 1, alongX ? 1 : 2, 1.8, wc, wc, '#111827');
+  });
+  box(bx, by, .9, w, d, 2.8, shade(color, .35), color, shade(color, -.25), 'rgba(15,23,42,.18)');
+  // cab at the front of travel
+  const front = alongX ? (dx < 0 ? 0 : 1) : (dy < 0 ? 0 : 1);
+  const cwid = 3.4;
+  const cx = alongX ? (front ? bx + w - cwid - .4 : bx + .4) : bx + .5, cy = alongX ? by + .5 : (front ? by + d - cwid - .4 : by + .4);
+  box(cx, cy, 3.7, alongX ? cwid : w - 1, alongX ? d - 1 : cwid, 3.2, '#f8fafc', '#334155', '#1e293b', 'rgba(15,23,42,.25)');
+  if (moving) {
+    const [hx, hy] = P(alongX ? (front ? bx + w + 6 : bx - 6) : x, alongX ? y : (front ? by + d + 6 : by - 6), 1.5);
+    const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, 10 * cam.s);
+    g.addColorStop(0, 'rgba(255,236,170,.45)'); g.addColorStop(1, 'rgba(255,236,170,0)');
+    ctx.fillStyle = g; ctx.fillRect(hx - 10 * cam.s, hy - 10 * cam.s, 20 * cam.s, 20 * cam.s);
   }
-  ctx.globalAlpha = 1;
 }
-function drawTug(x, y, dx, dy, color, sel, moving) {
-  const ang = Math.atan2(dy, dx || (dy ? 0 : 1));
-  if (sel) {
-    const p = 7.5 + Math.sin(performance.now() / 220) * 1.2;
-    ctx.strokeStyle = C.paint; ctx.lineWidth = .9; ctx.beginPath(); ctx.arc(x, y, p, 0, Math.PI * 2); ctx.stroke();
-  }
-  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
-  if (moving) {                    // headlight beam
-    ctx.globalCompositeOperation = 'lighter';
-    const gr = ctx.createRadialGradient(5, 0, 0, 5, 0, 14);
-    gr.addColorStop(0, 'rgba(255,240,190,.28)'); gr.addColorStop(1, 'rgba(255,240,190,0)');
-    ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(4.5, -1.5); ctx.lineTo(18, -6); ctx.lineTo(18, 6); ctx.lineTo(4.5, 1.5); ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-  }
-  rr(ctx, -4.2, -2.4, 9, 6, 1.8); ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fill();          // shadow
-  ctx.fillStyle = '#15181d';
-  [[-3.4, -3.6], [1.4, -3.6], [-3.4, 2.5], [1.4, 2.5]].forEach(([a, b]) => { rr(ctx, a, b, 2.2, 1.1, .5); ctx.fill(); });
-  rr(ctx, -4.6, -3, 9, 6, 1.8); ctx.fillStyle = color; ctx.fill();
-  rr(ctx, -4.6, -3, 9, 2.2, 1.2); ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fill();      // top light
-  rr(ctx, 0, -2.1, 3, 4.2, 1); ctx.fillStyle = 'rgba(17,21,26,.85)'; ctx.fill();          // cab
-  ctx.fillStyle = 'rgba(170,210,255,.55)'; ctx.fillRect(2.2, -1.6, .6, 3.2);               // windscreen
-  ctx.fillStyle = '#fff4c2'; ctx.fillRect(4.1, -2.4, .6, .9); ctx.fillRect(4.1, 1.5, .6, .9);
-  ctx.restore();
-}
-function drawDolly(x, y) { rr(ctx, x - .6, y + .3, 7.2, 6.6, 1); ctx.fillStyle = '#14171c'; ctx.fill(); }
+function drawDolly(x, y) { box(x - .7, y - .7, .5, ULD + 1.4, ULD + 1.4, 1, '#94a3b8', '#64748b', '#475569'); }
 function planeShape(x, y) {
   ctx.beginPath();
   if (ctx.roundRect) ctx.roundRect(x - 2.6, y, 5.2, 36, [2.6, 2.6, 1.4, 1.4]); else ctx.rect(x - 2.6, y, 5.2, 36);
   for (const s of [-1, 1]) {
-    ctx.moveTo(x + s * 2, y + 12); ctx.lineTo(x + s * 15.5, y + 19.5); ctx.lineTo(x + s * 15.5, y + 21.5); ctx.lineTo(x + s * 2, y + 17.5);
+    ctx.moveTo(x + s * 2, y + 12); ctx.lineTo(x + s * 16, y + 20); ctx.lineTo(x + s * 16, y + 22); ctx.lineTo(x + s * 2, y + 18);
     ctx.moveTo(x + s * 1.5, y + 30); ctx.lineTo(x + s * 7, y + 33.5); ctx.lineTo(x + s * 7, y + 35); ctx.lineTo(x + s * 1.5, y + 34);
   }
 }
+// a round body swept along y: one shaded ellipse per slice, far end first
+function tube(cx, y0, y1, cz, radius, lift, light, dark, step = .45) {
+  const g = ctx.createLinearGradient(0, 1.1, 0, -1.1);     // unit-circle space: +1 = top
+  g.addColorStop(0, light); g.addColorStop(.45, shade(light.startsWith('#') ? light : '#ffffff', -.04)); g.addColorStop(1, dark);
+  for (let yy = y0; yy <= y1 + 1e-6; yy += step) {
+    const r = radius(yy - y0); if (r <= .05) continue;
+    const [px, py] = P(cx, yy, cz + lift(yy - y0));
+    const u = cam.s * r;
+    ctx.setTransform(dpr * u * XA, dpr * u * XB, 0, -dpr * u * KZ, dpr * px, dpr * py);
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+  }
+  screen();
+}
+// a flat part (wing, tailplane) with a bit of thickness
+function slab(pts, z, t, top, edge) {
+  poly(pts.map(([x, y]) => P(x, y, z - t)), edge);
+  poly(pts.map(([x, y]) => P(x, y, z)), top, 'rgba(100,116,139,.35)', .6);
+}
 function drawPlane(x, y, f) {
-  const tail = TAIL[(f.no || '').slice(0, 2)] || C.alert;
-  ctx.save(); ctx.translate(3, 3.5); ctx.fillStyle = 'rgba(0,0,0,.3)'; planeShape(x, y); ctx.fill(); ctx.restore();
-  const gr = ctx.createLinearGradient(x - 15, 0, x + 15, 0);
-  gr.addColorStop(0, '#c9d0da'); gr.addColorStop(.5, '#f4f6f9'); gr.addColorStop(1, '#b9c1cc');
-  ctx.fillStyle = gr; planeShape(x, y); ctx.fill();
-  ctx.fillStyle = '#8f99a7';
-  rr(ctx, x - 10, y + 15.5, 2.8, 4.8, 1.3); ctx.fill(); rr(ctx, x + 7.2, y + 15.5, 2.8, 4.8, 1.3); ctx.fill();
-  rr(ctx, x - 1.7, y + 2, 3.4, 1.8, .9); ctx.fillStyle = '#1d2530'; ctx.fill();               // cockpit
-  ctx.fillStyle = 'rgba(40,52,68,.45)';
-  for (let i = 0; i < 9; i++) ctx.fillRect(x - .35, y + 6 + i * 2.4, .7, 1);                  // windows
-  rr(ctx, x - .8, y + 26.5, 1.6, 9.5, .8); ctx.fillStyle = tail; ctx.fill();                   // fin
-}
-function pill(text, x, y, bgc, fg, size = 6.5) {
-  ctx.font = NUMF(size, 700);
-  const w = ctx.measureText(text).width + 4;
-  rr(ctx, x - w / 2, y - .5, w, size + 2.2, 2.2); ctx.fillStyle = bgc; ctx.fill();
-  ctx.fillStyle = fg; ctx.fillText(text, x, y + .6);
+  const tail = TAIL[(f.no || '').slice(0, 2)] || C.alert, Z = 6.5, R = 2.9, L = 38;
+  // shadow
+  ground(0); ctx.fillStyle = 'rgba(15,23,42,.14)'; planeShape(x + 3.5, y + 3.5); ctx.fill(); screen();
+  // landing gear with wheels
+  ctx.strokeStyle = '#475569'; ctx.lineWidth = Math.max(1, cam.s * .5);
+  [[x, y + 5], [x - 4, y + 19], [x + 4, y + 19]].forEach(([gx, gy]) => {
+    const a = P(gx, gy, 0), b = P(gx, gy, Z - R + .5); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+    box(gx - .5, gy - .8, 0, 1, 1.6, 1.2, '#334155', '#1f2937', '#111827');
+  });
+  const body = t => t < 6 ? R * Math.sqrt(Math.max(.04, t / 6)) : t > 29 ? R * (1 - (t - 29) / (L - 29) * .7) : R;
+  const lift = t => t > 27 ? (t - 27) * .2 : 0;
+  const wing = sx => [[x + sx * 2, y + 12], [x + sx * 17, y + 20.5], [x + sx * 17, y + 23], [x + sx * 2, y + 19]];
+  const stab = sx => [[x + sx * 1.5, y + 32], [x + sx * 7.5, y + 35.5], [x + sx * 7.5, y + 37], [x + sx * 1.5, y + 36.5]];
+  const engine = sx => tube(x + sx * 8.5, y + 13, y + 19.5, Z - R - .4, t => t < .8 ? 1.3 + t * .3 : 1.55, () => 0, '#e2e8f0', '#64748b', .4);
+  // far side first (smaller x is further from the viewer)
+  slab(stab(-1), Z + 1.6, .5, '#e5eaf1', '#94a3b8');
+  slab(wing(-1), Z - 1, .8, '#e5eaf1', '#94a3b8');
+  engine(-1);
+  tube(x, y, y + L, Z, body, lift, '#ffffff', '#9aa6b6');
+  // cabin windows and cockpit on the side facing the viewer
+  ctx.fillStyle = 'rgba(30,41,59,.55)';
+  for (let yy = y + 7; yy <= y + 27; yy += 1.6) { const [wx, wy] = P(x + R * .82, yy, Z + .9); ctx.beginPath(); ctx.arc(wx, wy, Math.max(.8, cam.s * .33), 0, Math.PI * 2); ctx.fill(); }
+  poly([P(x - 1.4, y + 1.6, Z + 1.3), P(x + 1.4, y + 1.6, Z + 1.3), P(x + 1.9, y + 3.4, Z + 2.2), P(x - 1.9, y + 3.4, Z + 2.2)], '#1e293b');
+  // airline stripe along the body
+  ctx.strokeStyle = tail; ctx.lineWidth = Math.max(1, cam.s * .45); ctx.beginPath();
+  for (let yy = y + 5; yy <= y + 29; yy += 1) { const [sx, sy] = P(x + R * .98, yy, Z - .4 + lift(yy - y)); yy === y + 5 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy); }
+  ctx.stroke();
+  // near side parts
+  engine(1);
+  slab(wing(1), Z - 1, .8, '#f1f4f8', '#94a3b8');
+  slab(stab(1), Z + 1.6, .5, '#f1f4f8', '#94a3b8');
+  // upright tail fin in the airline colour, with a little thickness
+  const fin = dx => [P(x + dx, y + 28.5, Z + 2 + lift(1.5)), P(x + dx, y + 38, Z + 2.6 + lift(11)), P(x + dx, y + 38.6, Z + 11.5), P(x + dx, y + 35, Z + 11.5)];
+  poly(fin(-.35), shade(tail, -.3));
+  poly(fin(.35), tail, shade(tail, -.35), .6);
 }
 
-// ---------- state at time T ----------
-function slotHall(l, i) { // grid inside the hall above the door
-  const cols = l.type === 'Chute' ? 5 : 9, c = i % cols, r = Math.floor(i / cols);
-  return [l.x - cols * 3.5 + c * 7 + .5, 83 - r * 7.5];
+// ---------- labels (screen space, always readable) ----------
+const labels = [];
+function label(x, y, z, text, opt = {}) { labels.push({ x, y, z, text, prio: 5, ...opt }); }
+function drawLabels() {
+  screen();
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  const placed = [];
+  labels.sort((a, b) => a.prio - b.prio).forEach(l => {
+    const [sx, sy] = P(l.x, l.y, l.z);
+    const fs = l.size || 11.5;
+    ctx.font = `${l.weight || 700} ${fs}px "Plus Jakarta Sans", system-ui, sans-serif`;
+    const parts = Array.isArray(l.text) ? l.text : [[l.text, l.fg || '#fff']];
+    const widths = parts.map(([t]) => ctx.measureText(t).width);
+    const pad = l.bare ? 0 : 7, gap = 6, w = widths.reduce((a, b) => a + b, 0) + gap * (parts.length - 1) + pad * 2, h = fs + 9;
+    const x0 = Math.round(sx - w / 2);
+    let y0 = Math.round(sy - h - (l.lift || 6));
+    if (!l.bare) {                     // nudge up until it no longer covers a label placed before it
+      for (let k = 0; k < 4 && placed.some(p => x0 < p[0] + p[2] + 2 && p[0] < x0 + w + 2 && y0 < p[1] + p[3] + 2 && p[1] < y0 + h + 2); k++) y0 -= h + 3;
+      placed.push([x0, y0, w, h]);
+      if (y0 < sy - h - (l.lift || 6) - 1) { ctx.strokeStyle = 'rgba(23,32,51,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx, sy - (l.lift || 6)); ctx.lineTo(sx, y0 + h); ctx.stroke(); }
+    }
+    if (!l.bare) {
+      ctx.fillStyle = l.bg || 'rgba(23,32,51,.86)'; rr(ctx, x0, y0, w, h, h / 2.4); ctx.fill();
+      if (l.ring) { ctx.strokeStyle = l.ring; ctx.lineWidth = 1.5; ctx.stroke(); }
+    }
+    let cx = x0 + pad;
+    parts.forEach(([t, c], i) => { ctx.fillStyle = c; ctx.fillText(t, cx, y0 + h / 2 + .5); cx += widths[i] + gap; });
+  });
+  labels.length = 0;
 }
-function slotStand(l, i) { return [l.x + 16 + (i >= 7 ? 7.5 : 0), l.dy + 12 + (i % 7) * 7.5]; }
+function brackets(sx, sy, r) {
+  ctx.strokeStyle = C.brand; ctx.lineWidth = 2; const k = r * .45;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => {
+    ctx.beginPath(); ctx.moveTo(sx + a * r, sy + b * (r - k)); ctx.lineTo(sx + a * r, sy + b * r); ctx.lineTo(sx + a * (r - k), sy + b * r); ctx.stroke();
+  });
+}
 
-let selected = null;
+// ---------- pile slots ----------
+function slot(l, i) {   // returns [x, y, z] for the i-th ULD at a location
+  if (l.type === 'Chute') { const c = i % 4, layer = Math.floor(i / 4) % 3, row = Math.floor(i / 12); return [l.x - 12.5 + c * 6.3, 83.5 + row * 6.3, layer * ULD]; }
+  if (l.hall) { const c = i % 10, r = Math.floor(i / 10) % 7, layer = Math.floor(i / 70); return [l.x - 34 + c * 6.8, 18 + r * 10.5, layer * ULD]; }
+  return [l.x + 17 + (i >= 7 ? 6.6 : 0), l.dy + 10 + (i % 7) * 6.6, 0];
+}
+const CAP = l => l.type === 'Chute' ? 20 : l.hall ? 60 : 14;
+
+// ---------- frame ----------
+let selected = null, layoutKey = null, sceneKey = null;
 function frame(T) {
   const key = dayStart(T) + org;
-  if (key !== layoutKey) { layoutKey = key; layoutStands(relevantStands(dayStart(T))); bgDirty = true; }
-  sizeApron();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(bg, 0, 0);
-  ctx.setTransform(S, 0, 0, S, 0, 0);
-  ctx.textBaseline = 'top'; ctx.textAlign = 'center';
+  if (key !== layoutKey) { layoutKey = key; layoutStands(relevantStands(dayStart(T))); if (!userMoved) cam.fitted = false; }
+  sizeMap(); if (!cam.fitted) fit();
+  drawGround();
+  [[-14, 140], [W + 16, 150], [-12, H - 10], [W + 18, H - 30], [70, -14], [600, -12]].forEach(([x, y]) => drawTree(x, y));
+
   // planes on stand
   const planeAt = new Map();
   D.flights.forEach(f => {
@@ -695,21 +810,8 @@ function frame(T) {
     if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
     if (T >= inn && T <= out + 5 * 60) planeAt.set(l.id, f);
   });
-  planeAt.forEach((f, id) => {
-    const l = byId[id]; drawPlane(l.x, l.dy + 14, f);
-    pill(f.no, l.x, l.dy + 53, 'rgba(12,15,20,.78)', C.ink);
-    const left = Math.round(((f.etd || f.std) - T) / 60);
-    ctx.font = NUMF(5.5, 600); ctx.fillStyle = left < 20 ? C.alert : C.muted;
-    const late = D.tasks.filter(t => t.flight === f.id && t.del && t.del <= T && isLate(t) && inOrg(t.company)).length;
-    const label = left >= 0 ? `STD ${left}m` : 'PUSHBACK';
-    if (late) {
-      const w1 = ctx.measureText(label + ' · ').width, w2 = ctx.measureText(late + ' late').width, x0 = l.x - (w1 + w2) / 2;
-      ctx.textAlign = 'left'; ctx.fillText(label + ' · ', x0, l.dy + 63);
-      ctx.fillStyle = C.alert; ctx.fillText(late + ' late', x0 + w1, l.dy + 63); ctx.textAlign = 'center';
-    } else ctx.fillText(label, l.x, l.dy + 63);
-  });
 
-  // ULD piles (waiting at pickup, dropped at destination)
+  // ULD piles (waiting at pickup, dropped at destination) — same rules as classic.html
   const piles = new Map();
   const add = (l, t, a = 1) => { if (!piles.has(l.id)) piles.set(l.id, []); piles.get(l.id).push([t, a]); };
   let waiting = 0;
@@ -722,9 +824,8 @@ function frame(T) {
       const arrive = Math.max(o.vd, t.del);
       let leave = arrive + 25 * 60;
       if (!to.hall) {
-        // stay until this ULD's own flight departs (max 3 h), never the next flight on the same stand
         const f = flights[t.flight], out = f && (f.etd || f.std);
-        leave = out && out > t.del ? Math.min(out, t.del + 3 * 3600) : arrive + 45 * 60;   // real delivery vs departure
+        leave = out && out > t.del ? Math.min(out, t.del + 3 * 3600) : arrive + 45 * 60;
       }
       if (T >= arrive && T < leave) add(to, t, to.hall ? .85 : 1);
     }
@@ -732,303 +833,374 @@ function frame(T) {
   bankItems.forEach(b => {
     if (!inOrg(b.company) || T < b.t0 || T >= b.t1) return;
     const full = T >= b.fullAt;
-    if (full) waiting++;          // a filled ULD is waiting for a tug
+    if (full) waiting++;
     add(byId[b.bank], full ? b.task : { full: false });
   });
+
+  // everything that stands up gets depth-sorted (painter's algorithm on x + y)
+  const items = [];
+  const push = (x, y, fn) => items.push([x * XB + y * YB, fn, x, y]);
   piles.forEach((list, id) => {
-    const l = byId[id], hallLoc = l.hall;
-    if (l.x == null) return;
-    const max = hallLoc ? (l.type === 'Chute' ? 20 : 45) : 14;
-    list.slice(0, max).forEach(([t, a], i) => {
-      const [x, y] = hallLoc ? slotHall(l, i) : slotStand(l, i);
-      drawULD(x, y, t.full, a);
-      drawMarks(x, y, t, T);
-    });
-    if (list.length > max) {
-      const [x, y] = hallLoc ? slotHall(l, max - 1) : slotStand(l, max - 1);
-      pill('+' + (list.length - max), x + 13, y - .5, 'rgba(12,15,20,.8)', C.ink, 6);
-    }
+    const l = byId[id]; if (l.x == null) return;
+    const cap = CAP(l);
+    list.slice(0, cap).forEach(([t], i) => { const [x, y, z] = slot(l, i); push(x + ULD, y + ULD + z * .01, () => drawULD(x, y, z, t, T)); });
+    if (list.length > cap) { const [x, y] = slot(l, cap - 1); label(x + 4, y, 12, '+' + (list.length - cap), { bg: '#fff', fg: C.ink, ring: '#e2e8f0', size: 11 }); }
+  });
+  planeAt.forEach((f, id) => {
+    const l = byId[id];
+    push(l.x, l.dy + 14, () => drawPlane(l.x, l.dy + 12, f));
+    const left = Math.round(((f.etd || f.std) - T) / 60);
+    const late = D.tasks.filter(t => t.flight === f.id && t.del && t.del <= T && isLate(t) && inOrg(t.company)).length;
+    const parts = [[f.no, '#fff'], [left >= 0 ? `STD ${left}m` : 'Pushback', left < 20 ? '#fda4a7' : '#cbd5e1']];
+    if (late) parts.push([`${late} late`, '#fda4a7']);
+    label(l.x, l.dy + 26, 17, parts, { size: 11, prio: 3 });
   });
 
-  // tugs with dolly trains
   const states = drivers.filter(d => inOrg(d.company)).map(d => ({ d, st: driverState(d, T) }));
   const parked = new Map();
-  const tags = [];
   states.forEach(({ d, st }) => {
-    if (st.k === 'off') return;
-    const stc = statusOf(st);
+    if (st.k === 'off') { d._p = null; return; }
+    const [stText, , , col] = statusStyle(st);
     const ok = st.ra && st.ra.x != null && st.rb.x != null;
     let p, path = ok ? route(st.ra, st.rb) : null, s;
     const moving = st.k === 'dh' || st.k === 'carry';
-    if (moving && !path) return;      // route leaves the stands shown today (only right at midnight)
-    if (moving) {
-      s = (T - st.t0) / Math.max(1, st.t1 - st.t0) * path.len;
-      p = pointAt(path, s);
-    } else {
-      const l = st.loc || st.o?.from; if (!l || l.x == null) return;
+    if (moving && !path) { d._p = null; return; }
+    if (moving) { s = (T - st.t0) / Math.max(1, st.t1 - st.t0) * path.len; p = pointAt(path, s); }
+    else {
+      const l = st.loc || st.o?.from; if (!l || l.x == null) { d._p = null; return; }
       const n = parked.get(l.id) || 0; parked.set(l.id, n + 1);
       if (path && n === 0) { s = path.len; p = pointAt(path, s); }
-      else { p = { x: l.x + (n % 2 ? 1 : -1) * (7 + 10 * Math.floor(n / 2)), y: l.hall ? l.dy + 5 : l.dy + 1, dx: 1, dy: 0 }; path = null; }
+      else { p = { x: l.x + (n % 2 ? 1 : -1) * (8 + 11 * Math.floor(n / 2)), y: l.hall ? l.dy + 5 : l.dy + 1, dx: 1, dy: 0 }; path = null; }
     }
     if (st.k === 'carry' || st.k === 'atdrop') {
       st.o.tasks.filter(t => !(t.can && t.can <= T)).slice(0, 6).forEach((t, k) => {
-        const q = path ? pointAt(path, s - 8.5 - k * 7.5) : { x: p.x + 8 + k * 7.5, y: p.y };
-        drawDolly(q.x - 3, q.y - 3); drawULD(q.x - 3, q.y - 3.4, t.full); drawMarks(q.x - 3, q.y - 3.4, t, T);
+        const q = path ? pointAt(path, s - 9.5 - k * 8) : { x: p.x + 9 + k * 8, y: p.y };
+        const ux = q.x - ULD / 2, uy = q.y - ULD / 2;
+        push(ux + ULD, uy + ULD, () => { drawDolly(ux, uy); drawULD(ux, uy, 1.5, t, T); });
       });
     }
-    drawTug(p.x, p.y, p.dx, p.dy, stc.color, selected === d.id, moving);
-    const urgentRun = st.o && st.k !== 'idle' && st.o.tasks.some(t => isUrgent(t, T));
-    tags.push([d.tag, p.x, p.y - 13, selected === d.id ? C.paint : stc.color, urgentRun]);
+    push(p.x + 3, p.y + 3, () => drawTug(p.x, p.y, p.dx, p.dy, col, moving));
     d._p = p;
+    const urgentRun = st.o && st.k !== 'idle' && st.o.tasks.some(t => isUrgent(t, T));
+    const sel = selected === d.id;
+    const parts = [[d.tag, '#fff']];
+    if (sel || urgentRun) parts.push([urgentRun ? 'URGENT' : stText, urgentRun ? '#fecaca' : '#c7d2fe']);
+    label(p.x, p.y, 9, parts, { bg: sel ? C.brand : urgentRun ? '#b42318' : 'rgba(23,32,51,.86)', size: sel ? 12 : 11, prio: sel ? 0 : urgentRun ? 1 : 2 });
   });
-  tags.forEach(([t, x, y, c, urg]) => {
-    pill(t, x, y, c, '#12161c', 6);
-    if (urg) pill('URGENT', x, y - 9, C.alert, '#fff', 5.5);
-  });
+
+  // left yard sits behind the hall, everything else in front
+  const isBehind = ([, , x, y]) => x < BLD.x && y < BLD.y + BLD.d + 2;
+  const behind = items.filter(isBehind), front = items.filter(i => !isBehind(i));
+  behind.sort((a, b) => a[0] - b[0]).forEach(([, fn]) => fn());
+  drawBuilding();
+  front.sort((a, b) => a[0] - b[0]).forEach(([, fn]) => fn());
+
+  // signs and ground labels
+  hall.forEach(l => label(l.x, l.type === 'Chute' ? BLD.y + BLD.d : 54, l.type === 'Chute' ? 24 : 2,
+    l.label, l.type === 'Chute' ? { bg: '#fff', fg: '#1e3a8a', ring: '#c7d7fe', size: 11.5, prio: 4 } : { bg: 'rgba(255,255,255,.9)', fg: '#334155', ring: '#d5dde8', size: 11, prio: 4 }));
+  stands.forEach(l => label(l.x, (l.road === 'r1' ? ROAD.r2 - 9 : H + 14) - 2, 0, l.name, { bare: true, fg: '#a16207', size: 12, weight: 800, lift: -2 }));
+
+  // selection brackets
+  const sd = drvById[selected];
+  if (sd && sd._p) {
+    if (cam.follow) centerOn(sd._p.x, sd._p.y, 3);
+    const [sx, sy] = P(sd._p.x, sd._p.y, 3); brackets(sx, sy, Math.max(16, cam.s * 9));
+  }
+  drawLabels();
   return { states, waiting, planeAt, piles };
 }
 
 // ---------- panels ----------
-const $ = id => document.getElementById(id);
-const fmtT = t => new Date(t * 1000).toISOString().slice(11, 16);
-const fmtD = t => new Date(t * 1000).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
-const dayStart = t => Math.floor(t / 86400) * 86400;
-
-const roster = $('roster');
-drivers.forEach(d => {
-  const b = document.createElement('button');
-  b.type = 'button'; b.className = 'drv'; b.id = 'drv-' + d.tag;
-  b.innerHTML = `<span class="tag"></span><span class="co"></span><span class="pill"></span><span class="job"></span>`;
-  b.querySelector('.tag').textContent = d.tag;
-  b.addEventListener('click', () => { selected = selected === d.id ? null : d.id; render(true); });
-  roster.append(b); d.el = b;
-});
-let lastStats = null;
-function renderPanels(T, res) {
-  $('clockT').textContent = fmtT(T);
-  $('clockD').textContent = fmtD(T) + ' UTC';
-  const d0 = dayStart(T);
-  let full = 0, empty = 0, runs = 0;
-  D.tasks.forEach(t => { if (t.del && t.del >= d0 && t.del <= T && inOrg(t.company)) t.full ? full++ : empty++; });
-  orders.forEach(o => { if (o.d && o.d >= d0 && o.d <= T && inOrg(o.company)) runs++; });
-  drivers.forEach(d => d.el.hidden = !inOrg(d.company));
-  const on = res.states.filter(s => s.st.k !== 'off').length;
-  const moving = res.states.filter(s => s.st.k === 'carry' || s.st.k === 'dh').length;
-  // day summary: so far vs the whole (UTC) day
-  const d1 = d0 + 86400, day = { full: 0, empty: 0, runs: 0 };
-  const urg = { now: 0, day: 0 }, esc = { now: 0, day: 0 }, lateC = { now: 0, day: 0 };
-  const flSoFar = new Map(), flDay = new Set();
+const ICON = {
+  full: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M11 2 20 6.5v9L11 20 2 15.5v-9z" fill="#f5a623"/><path d="M11 2 20 6.5 11 11 2 6.5z" fill="#fcd77a"/><path d="M11 11v9l-9-4.5v-9z" fill="#d9861a"/></svg>',
+  empty: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M11 2 20 6.5v9L11 20 2 15.5v-9z" fill="#dfe5ec" stroke="#0d9488" stroke-width="1.2"/><path d="M11 11v9l-9-4.5v-9z" fill="#c5cfdb"/></svg>',
+  plane: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M10 2h2l1 7 7 4v2l-7-2-.6 4 2.6 2v1.5L11 19l-4 1.5V19l2.6-2L9 13l-7 2v-2l7-4z" fill="#2563eb"/></svg>',
+  clock: '<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#2563eb"/><path d="M11 6v5l3 2" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/></svg>',
+  tug: '<svg width="30" height="30" viewBox="0 0 30 30"><rect x="3" y="12" width="19" height="9" rx="2" fill="#2563eb"/><rect x="14" y="6" width="8" height="8" rx="1.5" fill="#1e293b"/><rect x="15.5" y="7.5" width="5" height="4" rx="1" fill="#bfdbfe"/><circle cx="8" cy="22" r="3" fill="#1f2937"/><circle cx="18" cy="22" r="3" fill="#1f2937"/><path d="M22 18h5" stroke="#64748b" stroke-width="2"/></svg>',
+};
+let lastStats = null, hourAgo = null;
+function counts(T) {
+  const d0 = dayStart(T), d1 = d0 + 86400, r = { full: 0, empty: 0, runs: 0, fullDay: 0, emptyDay: 0, runsDay: 0, flights: new Set(), flDay: new Set(), late: 0, lateDay: 0, urgent: 0, escalated: 0, delivered: 0 };
   D.tasks.forEach(t => {
     if (!inOrg(t.company)) return;
-    if (escalated(t) && t.urgentAt >= d0 && t.urgentAt < d1) { esc.day++; if (t.urgentAt <= T) esc.now++; }
+    if (escalated(t) && t.urgentAt >= d0 && t.urgentAt <= T) r.escalated++;
     if (!t.del || t.del < d0 || t.del >= d1) return;
-    t.full ? day.full++ : day.empty++;
-    if (t.urgent) { urg.day++; if (t.del <= T) urg.now++; }
-    if (isLate(t)) { lateC.day++; if (t.del <= T) lateC.now++; }
-    if (t.flight && flights[t.flight]) {
-      flDay.add(t.flight);
-      if (t.del <= T) {
-        const e = flSoFar.get(t.flight) || { n: 0, late: 0, last: 0 };
-        e.n++; if (isLate(t)) e.late++; e.last = Math.max(e.last, t.del); flSoFar.set(t.flight, e);
-      }
-    }
+    t.full ? r.fullDay++ : r.emptyDay++;
+    if (isLate(t)) r.lateDay++;
+    if (t.flight && flights[t.flight]) r.flDay.add(t.flight);
+    if (t.del > T) return;
+    t.full ? r.full++ : r.empty++;
+    r.delivered++;
+    if (isLate(t)) r.late++;
+    if (t.urgent) r.urgent++;
+    if (t.flight && flights[t.flight]) r.flights.add(t.flight);
   });
-  orders.forEach(o => { if (o.d && o.d >= d0 && o.d < d1 && inOrg(o.company)) day.runs++; });
-  $('dayName').textContent = fmtD(T);
-  $('daygrid').innerHTML = [
-    ['Full delivered', full, day.full, C.full],
-    ['Empty delivered', empty, day.empty, C.empty],
-    ['Flights processed', flSoFar.size, flDay.size, C.paint],
-    ['Trips completed', runs, day.runs, C.ink],
-  ].map(([l, v, tot, c]) => `<div class="ds"><span class="label">${l}</span><b style="color:${c}">${v}</b>
-    <div class="bar"><i style="width:${tot ? Math.round(v / tot * 100) : 0}%;background:${c}"></i></div><small>of ${tot} today</small></div>`).join('');
-  $('flchips').innerHTML = [...flSoFar.entries()].sort((a, b) => b[1].last - a[1].last).slice(0, 16)
-    .map(([id, e]) => `<span class="chip" title="${e.n} ULDs delivered${e.late ? `, ${e.late} late` : ''}">${flights[id].no} <b>${e.n}</b>${e.late ? ` <span class="late">${e.late} late</span>` : ''}</span>`).join('');
-  $('urgrid').innerHTML = [
-    ['Urgent delivered', urg.now, urg.day],
-    ['Escalated', esc.now, esc.day],
-    ['Late deliveries', lateC.now, lateC.day],
-  ].map(([l, v, tot]) => `<div class="ds"><span class="label">${l}</span><b style="color:${v ? C.alert : C.muted}">${v}</b>
-    <div class="bar"><i style="width:${tot ? Math.round(v / tot * 100) : 0}%;background:${C.alert}"></i></div><small>of ${tot} today</small></div>`).join('');
+  orders.forEach(o => { if (o.d && o.d >= d0 && o.d < d1 && inOrg(o.company)) { r.runsDay++; if (o.d <= T) r.runs++; } });
+  return r;
+}
+function renderPanels(T, res) {
+  $('clock').textContent = fmtT(T);
+  $('liveTxt').textContent = fmtD(T);
+  const ds = String(Math.max(dayStart(T) + 5 * 3600, tMin)); if ($('day').value !== ds && [...$('day').options].some(o => o.value === ds)) $('day').value = ds;
+  $('live').classList.toggle('paused', !playing);
+  const c = counts(T), prev = counts(Math.max(dayStart(T), T - 3600));
+  const onTime = c.delivered ? (100 * (c.delivered - c.late) / c.delivered) : 100;
+  const delta = (a, b) => a - b > 0 ? `<small>↑ +${a - b}</small>` : '';
+  $('kpis').innerHTML = [
+    [ICON.full, '#fff6e5', 'Full ULDs delivered', `${c.full}${delta(c.full, prev.full)}`, `of ${c.fullDay} today`],
+    [ICON.empty, '#e6f6f4', 'Empty ULDs delivered', `${c.empty}${delta(c.empty, prev.empty)}`, `of ${c.emptyDay} today`],
+    [ICON.plane, '#eaf1fe', 'Flights processed', `${c.flights.size}${delta(c.flights.size, prev.flights.size)}`, `of ${c.flDay.size} today · ${c.runs} trips`],
+    [ICON.clock, '#eaf1fe', 'On-time delivery', `${onTime.toFixed(1)}%`, `${c.late} late · ${c.urgent} urgent · ${c.escalated} escalated`],
+  ].map(([ic, bg, l, v, s]) => `<div class="card kpi"><span class="ic" style="background:${bg}">${ic}</span><span class="l">${l}</span><b>${v}</b><span class="s">${s}</span></div>`).join('');
 
   const inTransit = res.states.reduce((n, s) => n + (s.st.k === 'carry' || s.st.k === 'atdrop' ? s.st.o.tasks.filter(t => !(t.can && t.can <= T)).length : 0), 0);
-  lastStats = { full, empty, runs, flights: flSoFar.size, urgent: urg.now, escalated: esc.now, late: lateC.now, waiting: res.waiting, inTransit, moving, onShift: on };
-  $('stats').innerHTML = [
-    ['ULDs waiting for a tug', res.waiting, res.waiting > 12 ? C.alert : C.ink],
-    ['ULDs on the move', inTransit, C.ink],
-    ['Tugs moving / on shift', `${moving}/${on}`, C.ink],
-    ['Planes on stand', res.planeAt.size, C.ink],
-  ].map(([l, v, c]) => `<div class="stat"><span class="label">${l}</span><b style="color:${c}">${v}</b></div>`).join('');
-  $('onShift').textContent = `${on} on shift`;
-  res.states.forEach(({ d, st }) => {
-    const s = statusOf(st), el = d.el;
-    el.classList.toggle('off', st.k === 'off');
-    el.classList.toggle('sel', selected === d.id);
-    const urgentRun = st.o && st.k !== 'idle' && st.k !== 'off' && st.o.tasks.some(t => isUrgent(t, T));
-    el.querySelector('.co').innerHTML = (d.company || '') + (urgentRun ? '<span class="ub">URGENT</span>' : '');
-    const pill = el.querySelector('.pill'); pill.textContent = s.text; pill.style.background = s.color;
-    const done = d.orders.filter(o => o.d && o.d >= d0 && o.d <= T).length;
-    let job;
-    if (st.o && st.k !== 'idle' && st.k !== 'off') {
-      const o = st.o;
-      const n = [o.nFull && `${o.nFull} full`, o.nEmpty && `${o.nEmpty} empty`].filter(Boolean).join('+');
-      job = `<em>#${o.no ?? '?'}</em> ${n} · ${o.from.label} → ${o.to.label}${o.flight ? ' · ' + o.flight.no : ''}`;
-    } else if (st.k === 'idle') job = `at ${(st.loc || st.o?.to)?.label ?? '—'} · ${done} runs today`;
-    else job = `${done} runs today`;
-    el.querySelector('.job').innerHTML = job;
+  const on = res.states.filter(s => s.st.k !== 'off').length;
+  const moving = res.states.filter(s => s.st.k === 'carry' || s.st.k === 'dh').length;
+  lastStats = { full: c.full, empty: c.empty, runs: c.runs, flights: c.flights.size, urgent: c.urgent, escalated: c.escalated, late: c.late, waiting: res.waiting, inTransit, moving, onShift: on };
+
+  // default selection: the first driver who is doing something
+  if (!selected || !inOrg(drvById[selected]?.company)) selected = (res.states.find(s => !['off', 'idle'].includes(s.st.k)) || res.states.find(s => s.st.k !== 'off') || res.states[0])?.d.id || null;
+  renderDetail(T, res);
+  renderTracking(T, res);
+  renderList(T, res);
+}
+function orderOf(d, st, T) {
+  if (st.o && st.k !== 'off') return st.o;
+  return d.orders.filter(o => o.a && o.a <= T).sort((a, b) => b.a - a.a)[0] || null;
+}
+function renderDetail(T, res) {
+  const s = res.states.find(x => x.d.id === selected);
+  if (!s) { $('detail').innerHTML = '<div class="dsub">Choose a tug on the map or in the list.</div>'; return; }
+  const { d, st } = s, [txt, bg, fg] = statusStyle(st), o = orderOf(d, st, T);
+  const d0 = dayStart(T);
+  const done = d.orders.filter(x => x.d && x.d >= d0 && x.d <= T);
+  const carrying = (st.k === 'carry' || st.k === 'atdrop') ? st.o.tasks.filter(t => !(t.can && t.can <= T)) : [];
+  const urgent = st.o && st.k !== 'idle' && st.k !== 'off' && st.o.tasks.some(t => isUrgent(t, T));
+  let progress = 0, ptxt = '';
+  if ((st.k === 'dh' || st.k === 'carry') && st.t1 > st.t0) { progress = (T - st.t0) / (st.t1 - st.t0); ptxt = `${Math.round(progress * 100)}% of this leg`; }
+  else if (st.k === 'atpick' || st.k === 'atdrop') { progress = st.k === 'atdrop' ? 1 : 0; ptxt = st.k === 'atdrop' ? 'At drop-off' : 'At pickup'; }
+  else { ptxt = `${done.length} trips today`; progress = Math.min(1, done.length / 12); }
+  const what = o ? [o.nFull && `${o.nFull} full`, o.nEmpty && `${o.nEmpty} empty`].filter(Boolean).join(' + ') + ' ULD' : '—';
+  let action = '';
+  if (o && st.k !== 'idle' && st.k !== 'off') action = `${txt === 'Assigned' ? 'Holding' : txt} #${o.no} · ${o.from.label} → ${o.to.label}`;
+  else if (st.k === 'idle') action = `At ${(st.loc || st.o?.to)?.label ?? '—'}`;
+  else action = 'Not working right now';
+  const f = o?.flight, left = f ? Math.round(((f.etd || f.std) - T) / 60) : null;
+  $('detail').innerHTML = `
+    <div class="dhead"><span class="avatar">${ICON.tug}</span>
+      <div><div class="eyebrow">Tug · ${esc(d.company || '')}</div><div class="dname">${esc(d.tag)}</div><div class="dsub">${esc(d.name)} · baggage tug</div></div>
+      <div class="ibtns"><button class="ibtn" type="button" id="locate" title="Centre on this tug"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="8" cy="8" r="4.5"/><path d="M8 1v2.5M8 12.5V15M1 8h2.5M12.5 8H15"/></svg></button>
+      <button class="ibtn" type="button" id="close" title="Clear selection"><svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m3 3 8 8M11 3l-8 8"/></svg></button></div>
+    </div>
+    <div class="state"><span class="pill" style="background:${bg};color:${fg}">${esc(txt)}</span>${urgent ? '<span class="ub">URGENT</span>' : ''}<span>${esc(action)}</span></div>
+    <div class="pbar"><div class="track"><i style="width:${Math.round(progress * 100)}%;background:${st.k === 'carry' ? (st.o.full ? C.full : C.empty) : C.ok}"></i></div><span>${esc(ptxt)}</span></div>
+    <div class="kv">
+      <span>Carrying</span><strong>${carrying.length ? `${carrying.length} ${st.o.full ? 'full' : 'empty'} ULD${carrying.length > 1 ? 's' : ''}` : 'Empty'}</strong>
+      <span>Order</span><strong>${o ? `#${esc(o.no)} · ${esc(what)}` : '—'}</strong>
+      <span>Route</span><strong>${o ? `${esc(o.from.label)} → ${esc(o.to.label)}` : '—'}</strong>
+      <span>Flight</span><strong class="blue">${f ? `${esc(f.no)}${left != null ? ` · ${left >= 0 ? 'STD in ' + left + ' min' : 'departed'}` : ''}` : '—'}</strong>
+      <span>Trips today</span><strong>${done.length}</strong>
+      <span>Site</span><strong>T1 baggage hall → T2 apron</strong>
+    </div>`;
+  $('locate').onclick = () => { if (d._p) { centerOn(d._p.x, d._p.y, 3); userMoved = true; render(true); } };
+  $('close').onclick = () => { selected = '__none'; render(true); };
+}
+function renderTracking(T, res) {
+  const s = res.states.find(x => x.d.id === selected);
+  const o = s ? orderOf(s.d, s.st, T) : null;
+  if (!o) {
+    $('trkHead').textContent = '';
+    $('steps').innerHTML = '<div class="dsub" style="grid-column:1/-1">Select a tug to follow its order.</div>';
+    $('osum').innerHTML = '<span class="r">No order selected.</span>'; return;
+  }
+  const cancelled = o.x && o.x <= T && !(o.d && o.d <= T);
+  const steps = [['Created', o.ready, '<path d="M5 3h6l3 3v9H5z" fill="none" stroke="currentColor" stroke-width="1.6"/>'],
+    ['Accepted', o.a, '<path d="m4 9 3 3 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'],
+    ['Collected', o.c, '<path d="M3 6.5 9 3l6 3.5v6L9 16l-6-3.5z" fill="none" stroke="currentColor" stroke-width="1.6"/>'],
+    [cancelled ? 'Cancelled' : 'Delivered', cancelled ? o.x : o.d, cancelled ? '<path d="m5 5 8 8M13 5l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' : '<path d="M3 9h10m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>']];
+  let reached = -1; steps.forEach(([, t], i) => { if (t && t <= T) reached = i; });
+  const late = o.tasks.filter(isLate).length;
+  $('trkHead').textContent = `#${o.no} · ${o.company || ''}`;
+  $('steps').innerHTML = `<span class="fill" style="width:${Math.max(0, reached) * 25}%"></span>` + steps.map(([n, t, svg], i) => {
+    const cls = i < reached || (i === reached && i === 3) ? (i === 3 && cancelled ? 'bad' : 'done') : i === reached ? 'now' : '';
+    return `<div class="step ${cls}"><i><svg width="18" height="18" viewBox="0 0 18 18">${svg}</svg></i><b>${n}</b><small>${t && t <= T ? fmtT(t) : '—'}</small></div>`;
+  }).join('');
+  const f = o.flight, due = Math.min(...o.tasks.map(t => t.due || Infinity));
+  const dueTxt = isFinite(due) ? (o.d && o.d <= T ? (late ? `${late} late` : 'on time') : due > T ? `due ${fmtT(due)} · ${Math.round((due - T) / 60)} min left` : `overdue since ${fmtT(due)}`) : '';
+  const [txt, bg, fg] = s ? statusStyle(s.st.o === o ? s.st : { k: o.d && o.d <= T ? 'idle' : 'assigned' }) : ['', '', ''];
+  const stTxt = o.d && o.d <= T ? 'Delivered' : cancelled ? 'Cancelled' : txt;
+  $('osum').innerHTML = `<span class="n">#${esc(o.no)} · ${o.nFull ? o.nFull + ' full' : ''}${o.nFull && o.nEmpty ? ' + ' : ''}${o.nEmpty ? o.nEmpty + ' empty' : ''} ULD</span>
+    <span class="r">To ${esc(o.to.label)}${f ? ' · ' + esc(f.no) : ''}</span>
+    <span><span class="pill" style="background:${o.d && o.d <= T ? '#e7f6ec' : cancelled ? '#fdecec' : bg};color:${o.d && o.d <= T ? '#15803d' : cancelled ? '#b42318' : fg}">${esc(stTxt)}</span></span>
+    <span class="r">${esc(o.from.label)} → ${esc(o.to.label)}${dueTxt ? ' · ' + esc(dueTxt) : ''}</span>`;
+}
+let tab = 'drivers';
+function renderList(T, res) {
+  const banks = hall.filter(l => l.type === 'Chute');
+  const pileOf = l => { const p = { full: 0, empty: 0 }; (res.piles.get(l.id) || []).forEach(([t]) => t.full ? p.full++ : p.empty++); return p; };
+  const busy = res.states.filter(s => !['off', 'idle'].includes(s.st.k)).length;
+  $('tabs').innerHTML = [['drivers', 'Tugs', `${busy}/${res.states.length}`], ['banks', 'Banks', banks.length], ['flights', 'Flights', res.planeAt.size]]
+    .map(([k, n, c]) => `<button type="button" role="tab" id="tab-${k}" aria-selected="${tab === k}">${n} <em>${c}</em></button>`).join('') + '<span class="site">T1 → T2 apron</span>';
+  $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => { tab = b.id.slice(4); render(true); });
+  const bar = (v, c) => `<span class="track"><i style="width:${Math.round(Math.min(1, v) * 100)}%;background:${c}"></i></span>`;
+  const chev = '<svg width="10" height="14" viewBox="0 0 10 14"><path d="m3 2 5 5-5 5" stroke="#94a3b8" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>';
+  let html = '';
+  if (tab === 'drivers') {
+    const d0 = dayStart(T);
+    html = res.states.map(({ d, st }) => {
+      const [txt, bg, fg] = statusStyle(st), o = st.o;
+      const what = o && st.k !== 'idle' && st.k !== 'off' ? `#${o.no} ${o.from.label} → ${o.to.label}` : st.k === 'idle' ? `At ${(st.loc || st.o?.to)?.label ?? '—'}` : 'Off shift';
+      const trips = d.orders.filter(x => x.d && x.d >= d0 && x.d <= T).length;
+      return `<button type="button" class="row ${selected === d.id ? 'sel' : ''} ${st.k === 'off' ? 'off' : ''}" data-d="${d.id}">
+        <span class="id">${esc(d.tag)}<small>${esc(d.company || '')}</small></span><span class="what">${esc(what)}</span>
+        <span class="pill" style="background:${bg};color:${fg}">${esc(txt)}</span><span class="num">${bar(trips / 12, C.ok)}${trips} trips</span>${chev}</button>`;
+    }).join('');
+  } else if (tab === 'banks') {
+    html = banks.map(l => {
+      const p = pileOf(l), n = p.full + p.empty;
+      const [txt, bg, fg] = p.full >= 6 ? ['Busy', '#fff4e0', '#b45309'] : p.full ? ['Waiting', '#e8f0fe', '#1d4ed8'] : ['Quiet', '#f1f5f9', '#475569'];
+      return `<button type="button" class="row" data-l="${l.id}"><span class="id">${esc(l.label)}<small>bank</small></span>
+        <span class="what">${p.full} full waiting · ${p.empty} empty</span><span class="pill" style="background:${bg};color:${fg}">${txt}</span>
+        <span class="num">${bar(n / 12, p.full ? C.full : C.empty)}${n} ULDs</span>${chev}</button>`;
+    }).join('');
+  } else {
+    html = [...res.planeAt.entries()].map(([id, f]) => {
+      const l = byId[id], left = Math.round(((f.etd || f.std) - T) / 60);
+      const got = D.tasks.filter(t => t.flight === f.id && t.del && t.del <= T && inOrg(t.company)).length;
+      const late = D.tasks.filter(t => t.flight === f.id && t.del && t.del <= T && isLate(t) && inOrg(t.company)).length;
+      const [txt, bg, fg] = left < 0 ? ['Pushback', '#f1f5f9', '#475569'] : left < 20 ? ['Closing', '#fdecec', '#b42318'] : ['On stand', '#e7f6ec', '#15803d'];
+      return `<button type="button" class="row" data-l="${id}"><span class="id">${esc(f.no)}<small>stand ${esc(l.name)}</small></span>
+        <span class="what">${got} ULDs delivered${late ? ` · ${late} late` : ''} · STD ${fmtT(f.etd || f.std)}</span><span class="pill" style="background:${bg};color:${fg}">${txt}</span>
+        <span class="num">${bar(Math.max(0, 1 - left / 150), left < 20 ? C.alert : C.brand)}${left >= 0 ? left + ' min' : 'gone'}</span>${chev}</button>`;
+    }).join('') || '<div class="dsub" style="padding:10px 4px">No planes on stand right now.</div>';
+  }
+  $('rows').innerHTML = html;
+  $('rows').querySelectorAll('.row').forEach(r => r.onclick = () => {
+    if (r.dataset.d) { selected = r.dataset.d; const d = drvById[selected]; if (d?._p) centerOn(d._p.x, d._p.y, 3); }
+    else if (r.dataset.l) { const l = byId[r.dataset.l]; if (l?.x != null) centerOn(l.x, l.hall ? 80 : l.dy + 25, 0); }
+    userMoved = true; render(true);
   });
-  // ticker
-  const lg = org === 'all' ? log : log.filter(e => e.org === org);
-  let hi = lg.length; while (hi > 0 && lg[hi - 1].t > T) hi--;
-  $('ticker').innerHTML = lg.slice(Math.max(0, hi - 14), hi).reverse()
-    .map(e => `<li><time>${fmtT(e.t)}</time><span>${e.html}</span></li>`).join('') || '<li><time></time><span>No orders yet.</span></li>';
 }
 
-// ---------- timeline strip ----------
+// ---------- time scrubber ----------
 const tl = $('tl'), tctx = tl.getContext('2d');
-let tlW = 0, tlH = 0, dpr = 1;
-function sizeTL() { dpr = window.devicePixelRatio || 1; tlW = tl.clientWidth; tlH = tl.clientHeight; tl.width = tlW * dpr; tl.height = tlH * dpr; }
+let tlW = 0, tlH = 0;
 function drawTL(T) {
-  if (tl.clientWidth !== tlW || tl.clientHeight !== tlH) sizeTL();   // page may have loaded hidden or at 0 width
+  if (tl.clientWidth !== tlW || tl.clientHeight !== tlH) { tlW = tl.clientWidth; tlH = tl.clientHeight; tl.width = tlW * dpr; tl.height = tlH * dpr; }
   if (!tlW || !tlH) return;
   const g = tctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, tlW, tlH);
-  const top = 14, base = tlH - 4, bw = tlW / nBins;
-  g.fillStyle = '#20262e';
-  for (let i = 0; i < nBins; i++) g.fillRect(i * bw, base - 1, Math.max(1, bw - 1), 1);
+  const top = 16, base = tlH - 6, bw = tlW / nBins;
   bins.forEach((b, i) => {
     const hF = b[0] / maxBin * (base - top), hE = b[1] / maxBin * (base - top);
-    g.fillStyle = C.full; g.fillRect(i * bw, base - hF, Math.max(1, bw - 1), hF);
-    g.fillStyle = C.empty; g.fillRect(i * bw, base - hF - hE, Math.max(1, bw - 1), hE);
+    g.fillStyle = 'rgba(245,158,11,.75)'; g.fillRect(i * bw, base - hF, Math.max(1, bw - 1), hF);
+    g.fillStyle = 'rgba(13,148,136,.65)'; g.fillRect(i * bw, base - hF - hE, Math.max(1, bw - 1), hE);
   });
-  g.font = '600 10px Nunito, system-ui, sans-serif'; g.textBaseline = 'top';
-  for (let t = dayStart(tMin) + 86400; t < tMax; t += 86400) {
-    const x = (t - tMin) / 3600 * bw;
-    g.fillStyle = '#3a434f'; g.fillRect(x, 0, 1, tlH);
-  }
-  for (let t = dayStart(tMin); t < tMax && bw * 24 > 90; t += 86400) {
-    const x = Math.max(0, (t - tMin) / 3600 * bw) + 4;
-    g.fillStyle = C.muted; g.fillText(fmtD(Math.max(t, tMin)).toUpperCase(), x, 1);
+  g.font = '600 11px "Plus Jakarta Sans", system-ui, sans-serif'; g.textBaseline = 'top';
+  for (let t = dayStart(tMin); t < tMax; t += 86400) {
+    const x = Math.max(0, (t - tMin) / 3600 * bw);
+    g.fillStyle = '#d5dde8'; if (t > tMin) g.fillRect(x, 0, 1, tlH);
+    if (bw * 24 > 70) { g.fillStyle = C.muted; g.fillText(fmtD(Math.max(t, tMin)), x + 6, 3); }
   }
   const x = (T - tMin) / (tMax - tMin) * tlW;
-  g.fillStyle = C.paint; g.fillRect(x - 1, 0, 2, tlH);
-  g.beginPath(); g.moveTo(x - 5, 0); g.lineTo(x + 5, 0); g.lineTo(x, 6); g.fill();
+  g.fillStyle = C.brand; g.fillRect(0, tlH - 3, x, 3);
+  g.beginPath(); g.arc(x, tlH - 2, 6, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(x, tlH - 2, 2.5, 0, Math.PI * 2); g.fill();
 }
-function tFromX(ev) { const r = tl.getBoundingClientRect(); return tMin + Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * (tMax - tMin); }
-let dragging = false;
-tl.addEventListener('pointerdown', e => { dragging = true; tl.setPointerCapture(e.pointerId); T = tFromX(e); render(true); });
-tl.addEventListener('pointermove', e => { if (dragging) { T = tFromX(e); render(true); } });
-tl.addEventListener('pointerup', () => dragging = false);
+const tFromX = ev => { const r = tl.getBoundingClientRect(); return tMin + Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * (tMax - tMin); };
+let scrubbing = false;
+tl.addEventListener('pointerdown', e => { scrubbing = true; tl.setPointerCapture(e.pointerId); T = tFromX(e); render(true); });
+tl.addEventListener('pointermove', e => { if (scrubbing) { T = tFromX(e); render(true); } });
+tl.addEventListener('pointerup', () => scrubbing = false);
 
-// day jump buttons
-for (let t = dayStart(tMin); t < tMax; t += 86400) {
-  const b = document.createElement('button'); b.type = 'button';
-  b.textContent = fmtD(t);
-  const start = Math.max(t + 5 * 3600, tMin);
-  b.addEventListener('click', () => { T = start; render(true); });
-  $('days').append(b);
-}
-
-// click a tug on the map to select its driver
-cv.addEventListener('click', e => {
-  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
-  let best = null, bd = 12;
-  drivers.forEach(d => { if (!d._p || d._hidden) return; const dd = Math.hypot(d._p.x - x, d._p.y - y); if (dd < bd) { bd = dd; best = d.id; } });
-  selected = best; render(true);
+// ---------- map interaction ----------
+let userMoved = false, drag = null;
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, ox: cam.ox, oy: cam.oy, moved: false }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.hypot(dx, dy) > 4) { drag.moved = true; cv.classList.add('dragging'); cam.follow = false; syncFollow(); }
+  if (drag.moved) { cam.ox = drag.ox + dx; cam.oy = drag.oy + dy; userMoved = true; userMovedSinceHome = true; }
 });
+cv.addEventListener('pointerup', e => {
+  cv.classList.remove('dragging');
+  if (drag && !drag.moved) {          // a click: pick the nearest tug
+    const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    let best = null, bd = 26;
+    drivers.forEach(d => { if (!d._p) return; const [sx, sy] = P(d._p.x, d._p.y, 3); const dd = Math.hypot(sx - mx, sy - my); if (dd < bd) { bd = dd; best = d.id; } });
+    if (best) { selected = best; render(true); }
+  }
+  drag = null;
+});
+cv.addEventListener('wheel', e => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top); userMoved = true; }, { passive: false });
+$('zin').onclick = () => { zoomAt(1.25); userMoved = true; };
+$('zout').onclick = () => { zoomAt(1 / 1.25); userMoved = true; };
+$('home').onclick = () => { userMoved = false; cam.follow = false; syncFollow(); overview = !overview && cam.fitted && !userMovedSinceHome ? true : false; userMovedSinceHome = false; fit(); };
+let userMovedSinceHome = false;
+const syncFollow = () => $('follow').setAttribute('aria-pressed', String(cam.follow));
+$('follow').onclick = () => { cam.follow = !cam.follow; if (cam.follow) { userMoved = true; if (cam.s < 2) zoomAt(2.2 / cam.s); } syncFollow(); };
 
-// ---------- loop ----------
+// ---------- controls ----------
 let T = tMin + busiest * 3600 - 40 * 60;
 let playing = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let speed = 60, lastNow = performance.now(), lastPanel = 0;
-const playBtn = $('play');
-const syncPlay = () => playBtn.textContent = playing ? 'Pause' : 'Play';
-playBtn.addEventListener('click', () => { playing = !playing; syncPlay(); });
-$('speed').addEventListener('change', e => speed = +e.target.value);
-$('skip').addEventListener('click', () => {
-  let n = Infinity;
-  orders.forEach(o => { if (o.a && o.a > T + 5 && inOrg(o.company)) n = Math.min(n, o.a); });
-  if (n < Infinity) { T = n - 20; render(true); }
-});
+const syncPlay = () => { $('play').textContent = playing ? 'Pause' : 'Play'; };
+$('play').onclick = () => { playing = !playing; syncPlay(); render(true); };
+$('speed').onchange = e => speed = +e.target.value;
+$('skip').onclick = () => {
+  let n = Infinity; orders.forEach(o => { if (o.a && o.a > T + 5 && inOrg(o.company)) n = Math.min(n, o.a); });
+  if (n < Infinity) { T = n - 20; const o = [...orders.values()].find(x => x.a === n && inOrg(x.company)); if (o && drvById[o.driver]) selected = o.driver; render(true); }
+};
+const daySel = $('day');
+for (let t = dayStart(tMin); t < tMax; t += 86400) { const op = document.createElement('option'); op.value = Math.max(t + 5 * 3600, tMin); op.textContent = fmtD(t); daySel.append(op); }
+daySel.onchange = () => { T = +daySel.value; render(true); };
 function buildOrgFilter() {
-  const box = $('org');
-  box.innerHTML = '';
+  const box = $('org'); box.innerHTML = '';
   ['all', ...ORGS].forEach(v => {
     const b = document.createElement('button');
     b.type = 'button'; b.id = 'org-' + v; b.textContent = v === 'all' ? 'All' : v;
     b.setAttribute('aria-pressed', String(org === v));
-    b.addEventListener('click', () => {
-      org = v;
-      try { localStorage.setItem('apron-org', v); } catch (e) { /* storage unavailable */ }
-      if (selected && !inOrg(drvById[selected]?.company)) selected = null;
-      computeBins(); buildOrgFilter(); render(true);
-    });
+    b.onclick = () => { org = v; try { localStorage.setItem('apron-org', v); } catch (e) { /* storage unavailable */ } computeBins(); buildOrgFilter(); render(true); };
     box.append(b);
   });
 }
 buildOrgFilter();
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playing = !playing; syncPlay(); } });
+syncPlay();
 
-// map size: enlarge (sidebar moves below the map) or full screen
-function setWide(on) {
-  $('mainTop').classList.toggle('wide', on);
-  $('enlarge').setAttribute('aria-pressed', String(on));
-  $('enlarge').textContent = on ? 'Shrink map' : 'Enlarge map';
-  try { localStorage.setItem('apron-wide', on ? '1' : ''); } catch (e) { /* storage unavailable */ }
-}
-$('enlarge').addEventListener('click', () => setWide(!$('mainTop').classList.contains('wide')));
-try { if (localStorage.getItem('apron-wide')) setWide(true); } catch (e) { /* storage unavailable */ }
-$('fs').addEventListener('click', () => {
-  const st = $('stage');
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  else if (st.requestFullscreen) st.requestFullscreen().catch(() => setWide(true));
-  else setWide(true);
-});
-document.addEventListener('fullscreenchange', () => { $('fs').textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
-
-// Read-only hook for tools/validate.py: jump to a moment and report exactly what the page shows.
+// Read-only hook for tools/validate.py (same contract as classic.html).
 window.apronDebug = {
   snapshot(t, o = 'all') {
     playing = false; syncPlay();
     org = o; computeBins(); buildOrgFilter();
-    T = t; drivers.forEach(d => d._p = null);
+    T = t;
     const res = frame(T); renderPanels(T, res); drawTL(T);
     const piles = {};
-    res.piles.forEach((list, id) => {
-      const p = piles[byId[id].name] = { full: 0, empty: 0 };
-      list.forEach(([task]) => task.full ? p.full++ : p.empty++);
-    });
+    res.piles.forEach((list, id) => { const p = piles[byId[id].name] = { full: 0, empty: 0 }; list.forEach(([task]) => task.full ? p.full++ : p.empty++); });
     return {
       t: T, org, stats: lastStats,
-      drivers: res.states.map(({ d, st }) => ({ id: d.id, tag: d.tag, company: d.company, status: statusOf(st).text, order: st.o && st.k !== 'idle' ? st.o.id : null })),
-      rosterVisible: drivers.filter(d => !d.el.hidden).map(d => d.tag),
+      drivers: res.states.map(({ d, st }) => ({ id: d.id, tag: d.tag, company: d.company, status: statusStyle(st)[0], order: st.o && st.k !== 'idle' ? st.o.id : null })),
+      rosterVisible: drivers.filter(d => inOrg(d.company)).map(d => d.tag),
       planes: [...res.planeAt.entries()].map(([id, f]) => ({ stand: byId[id].name, flight: f.no, flightId: f.id })),
-      piles,
-      chartTotal: bins.reduce((a, b) => a + b[0] + b[1], 0),
-      logTop: [...document.querySelectorAll('#ticker li')].map(li => li.textContent.trim()).slice(0, 5),
+      piles, chartTotal: bins.reduce((a, b) => a + b[0] + b[1], 0), logTop: [],
     };
   },
   range: () => ({ tMin, tMax }),
 };
-document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playing = !playing; syncPlay(); } });
-syncPlay();
 
 function render(force) {
-  drivers.forEach(d => d._p = null);
   const res = frame(T);
   const now = performance.now();
-  if (force || now - lastPanel > 250) { renderPanels(T, res); lastPanel = now; }
+  if (force || now - lastPanel > 300) { renderPanels(T, res); lastPanel = now; }
   drawTL(T);
 }
 function tick(now) {
   const dt = Math.min(0.1, (now - lastNow) / 1000); lastNow = now;
-  if (playing && !dragging) { T += dt * speed; if (T > tMax) T = tMin; }
+  if (playing && !scrubbing) { T += dt * speed; if (T > tMax) T = tMin; }
   render(false);
   requestAnimationFrame(tick);
 }
-window.addEventListener('resize', () => { sizeTL(); render(true); });
-
-(document.fonts ? Promise.all([document.fonts.load('600 8px "Pixelify Sans"'), document.fonts.load('600 10px Nunito'), document.fonts.load('700 10px "JetBrains Mono"')]).catch(() => {}) : Promise.resolve()).then(() => {
-  S = 0; sizeTL(); render(true); requestAnimationFrame(tick);
-});
+window.addEventListener('resize', () => { cw = 0; if (!userMoved) cam.fitted = false; render(true); });
+(document.fonts ? document.fonts.load('700 12px "Plus Jakarta Sans"').catch(() => {}) : Promise.resolve()).then(() => { render(true); requestAnimationFrame(tick); });
 })();
 </script>
 </body>

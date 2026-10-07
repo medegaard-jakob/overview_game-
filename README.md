@@ -1,14 +1,23 @@
 # Baggage Apron Replay
 
-A pixel-art replay of ULD baggage transport from the T1 baggage hall to the Terminal 2 apron stands,
+A replay of ULD baggage transport from the T1 baggage hall to the Terminal 2 apron stands,
 built from a GHS task-core data export (21–25 Sep 2026).
 
 Open `index.html` in a browser. It loads `data/replay.js`.
 
-- **Tugs** are coloured by driver status: to pickup (no load), full run, empty run, idle.
-- **ULDs**: filled amber = full (bags), outlined teal = empty. They wait at their pickup point, ride on the dolly train, and stay at the stand until the flight's departure.
-- **Drivers** panel shows each driver's logged status, current order and runs completed that day.
-- **Timeline** shows ULDs delivered per hour. Drag it to scrub, or use the day buttons.
+- **`index.html`: Apron Control Room** (main view). A light isometric 3D apron: the blue-roofed hall with dock
+  doors, 3D tugs pulling dolly trains, ULD stacks and planes on stand. Floating cards show today's KPIs
+  (with on-time delivery), the selected tug, order tracking steps, and live lists of tugs, banks and flights.
+  Drag to pan, scroll or use the buttons to zoom, click a tug to follow it, scrub time along the bottom.
+- **`classic.html`: pixel view.** The original top-down game-style view with a drivers panel, day summary,
+  hourly chart and order log.
+
+Both views share the same replay logic, and the validator checks either one.
+
+On the map:
+- **Tugs** are coloured by driver status: assigned, to pickup, full run, empty run, idle.
+- **ULDs**: amber = full (bags), light grey/teal = empty. They wait at their pickup point, ride on the dolly
+  train, and stay at the stand until their flight departs. Red marks show urgent, overdue and late ULDs.
 
 ## Rebuilding the data
 
@@ -31,7 +40,8 @@ Flights with "Beumer" in the flight number are vendor test flights and are left 
 
 ```
 cd tools && npm install && cd ..        # once: Playwright for the on-screen checks
-python3 tools/validate.py path/to/extracted/Data
+python3 tools/validate.py path/to/extracted/Data                       # main view (index.html)
+python3 tools/validate.py path/to/extracted/Data --page classic.html   # pixel view
 ```
 
 `validate.py` recomputes the expected values straight from the raw CSV export, without using
