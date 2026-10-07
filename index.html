@@ -94,7 +94,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 .kv strong a, .kv strong.blue { color: var(--brand); }
 .ub { font-size: 10.5px; font-weight: 800; letter-spacing: .05em; color: #fff; background: var(--alert); border-radius: 6px; padding: 2px 6px; }
 
-.tracking { left: 14px; bottom: 62px; width: min(820px, calc(100% - 520px)); padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr); gap: 16px; align-items: center; }
+.tracking { left: 14px; bottom: 90px; width: min(820px, calc(100% - 520px)); padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr); gap: 16px; align-items: center; }
 .th { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
 .th h2 { margin: 0; font-size: 15px; font-weight: 800; display: flex; gap: 8px; align-items: center; }
 .th span { font-size: 12px; color: var(--muted); }
@@ -112,7 +112,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 .osum .n { font-weight: 800; font-size: 15px; }
 .osum .r { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
 
-.lists { right: 14px; bottom: 62px; width: 470px; padding: 12px 14px; display: grid; gap: 8px; }
+.lists { right: 14px; bottom: 90px; width: 470px; padding: 12px 14px; display: grid; gap: 8px; }
 .tabs { display: flex; align-items: center; gap: 4px; }
 .tabs button { border: 0; background: transparent; border-radius: 9px; padding: 6px 10px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .tabs button[aria-selected="true"] { background: #eef2f7; color: var(--ink); font-weight: 800; }
@@ -127,8 +127,11 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 .row .num { font-size: 11.5px; color: var(--muted); display: grid; gap: 3px; }
 .row.off { opacity: .55; }
 
-.scrub { left: 0; right: 0; bottom: 0; height: 50px; background: rgba(255,255,255,.88); backdrop-filter: blur(6px); border-top: 1px solid var(--line); }
-#tl { width: 100%; height: 100%; display: block; cursor: ew-resize; touch-action: none; }
+.scrub { left: 14px; right: 14px; bottom: 12px; height: 66px; padding: 6px 12px 4px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.scrub .sl { display: grid; gap: 3px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.scrub .sl span { display: flex; gap: 6px; align-items: center; font-weight: 600; color: var(--muted); font-size: 11.5px; }
+.scrub .sl i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+#tl { width: 100%; height: 54px; display: block; cursor: ew-resize; touch-action: none; min-width: 0; }
 
 .toast { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); }
 
@@ -145,7 +148,8 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
   .ctrls { display: none; }
   .tracking { width: auto; grid-template-columns: minmax(0, 1fr); }
   .tracking .osum { display: grid; }
-  .scrub { height: 56px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .scrub { height: 74px; grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .scrub .sl { display: none; }
 }
 @media (max-width: 520px) {
   .steps b { font-size: 11px; }
@@ -199,7 +203,10 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
     <div class="rows" id="rows" role="tabpanel"></div>
   </section>
 
-  <div class="float scrub"><canvas id="tl" aria-label="ULDs delivered per hour, drag to move through time"></canvas></div>
+  <div class="float card scrub">
+    <div class="sl">Deliveries per hour<span><i style="background:#f5a623"></i>Full <i style="background:#14b8a6;margin-left:6px"></i>Empty</span></div>
+    <canvas id="tl" aria-label="ULDs delivered per hour, drag to move through time"></canvas>
+  </div>
 </main>
 
 <script src="data/replay.js"></script>
@@ -1089,22 +1096,47 @@ function drawTL(T) {
   if (tl.clientWidth !== tlW || tl.clientHeight !== tlH) { tlW = tl.clientWidth; tlH = tl.clientHeight; tl.width = tlW * dpr; tl.height = tlH * dpr; }
   if (!tlW || !tlH) return;
   const g = tctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, tlW, tlH);
-  const top = 16, base = tlH - 6, bw = tlW / nBins;
+  const top = 20, base = tlH - 12, bw = tlW / nBins, dx = Math.min(3, bw * .35), dy = dx * .6;
+  const quad = (pts, c) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fillStyle = c; g.fill(); };
+  // floor strip under the columns
+  quad([[0, base], [tlW, base], [tlW + dx, base - dy], [dx, base - dy]], '#eef2f7');
+  // little 3D columns: front, side and top faces like the boxes on the map
+  const col = (x, y0, h, front, side, topc) => {
+    if (h < .5) return;
+    const w = Math.max(1, bw - dx - 1), y1 = y0 - h;
+    g.fillStyle = front; g.fillRect(x, y1, w, h);
+    quad([[x + w, y1], [x + w + dx, y1 - dy], [x + w + dx, y0 - dy], [x + w, y0]], side);
+    quad([[x, y1], [x + dx, y1 - dy], [x + w + dx, y1 - dy], [x + w, y1]], topc);
+  };
+  const playing = (T - tMin) / 3600;
   bins.forEach((b, i) => {
-    const hF = b[0] / maxBin * (base - top), hE = b[1] / maxBin * (base - top);
-    g.fillStyle = 'rgba(245,158,11,.75)'; g.fillRect(i * bw, base - hF, Math.max(1, bw - 1), hF);
-    g.fillStyle = 'rgba(13,148,136,.65)'; g.fillRect(i * bw, base - hF - hE, Math.max(1, bw - 1), hE);
+    const hF = b[0] / maxBin * (base - top), hE = b[1] / maxBin * (base - top), x = i * bw;
+    g.globalAlpha = i < playing ? 1 : .45;           // hours still to come are faded
+    col(x, base, hF, '#f5a623', '#d9861a', '#fcd77a');
+    col(x, base - hF, hE, '#14b8a6', '#0f766e', '#5eead4');
   });
-  g.font = '600 11px "Plus Jakarta Sans", system-ui, sans-serif'; g.textBaseline = 'top';
+  g.globalAlpha = 1;
+  // day markers as small pills
+  g.font = '700 11px "Plus Jakarta Sans", system-ui, sans-serif'; g.textBaseline = 'middle';
   for (let t = dayStart(tMin); t < tMax; t += 86400) {
     const x = Math.max(0, (t - tMin) / 3600 * bw);
-    g.fillStyle = '#d5dde8'; if (t > tMin) g.fillRect(x, 0, 1, tlH);
-    if (bw * 24 > 70) { g.fillStyle = C.muted; g.fillText(fmtD(Math.max(t, tMin)), x + 6, 3); }
+    if (t > tMin) { g.fillStyle = '#d5dde8'; g.fillRect(x, 4, 1, base - 4); }
+    if (bw * 24 > 70) {
+      const txt = fmtD(Math.max(t, tMin)), w = g.measureText(txt).width + 12;
+      g.fillStyle = '#f1f5f9'; rr(g, x + 4, 2, w, 16, 8); g.fill();
+      g.fillStyle = '#475569'; g.fillText(txt, x + 10, 10.5);
+    }
   }
+  // progress track and playhead with a time bubble
   const x = (T - tMin) / (tMax - tMin) * tlW;
-  g.fillStyle = C.brand; g.fillRect(0, tlH - 3, x, 3);
-  g.beginPath(); g.arc(x, tlH - 2, 6, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#fff'; g.beginPath(); g.arc(x, tlH - 2, 2.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#e2e8f0'; rr(g, 0, tlH - 6, tlW, 4, 2); g.fill();
+  g.fillStyle = C.brand; rr(g, 0, tlH - 6, Math.max(4, x), 4, 2); g.fill();
+  g.fillStyle = 'rgba(37,99,235,.25)'; g.fillRect(x - .5, 2, 1, tlH - 8);
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(x, tlH - 4, 6.5, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = C.brand; g.lineWidth = 2.5; g.stroke();
+  const tt = fmtT(T), tw = g.measureText(tt).width + 14, bx = Math.min(tlW - tw, Math.max(0, x - tw / 2));
+  g.fillStyle = C.brand; rr(g, bx, base - 34, tw, 18, 9); g.fill();
+  g.fillStyle = '#fff'; g.fillText(tt, bx + 7, base - 24.5);
 }
 const tFromX = ev => { const r = tl.getBoundingClientRect(); return tMin + Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * (tMax - tMin); };
 let scrubbing = false;
