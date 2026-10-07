@@ -691,20 +691,60 @@ function planeShape(x, y) {
     ctx.moveTo(x + s * 1.5, y + 30); ctx.lineTo(x + s * 7, y + 33.5); ctx.lineTo(x + s * 7, y + 35); ctx.lineTo(x + s * 1.5, y + 34);
   }
 }
-function drawPlane(x, y, f) {
-  const tail = TAIL[(f.no || '').slice(0, 2)] || C.alert, Z = 7;
-  ground(0); ctx.fillStyle = 'rgba(15,23,42,.13)'; planeShape(x + 3.5, y + 3.5); ctx.fill();
-  // landing gear
-  screen(); ctx.strokeStyle = '#475569'; ctx.lineWidth = Math.max(1, cam.s * .5);
-  [[x, y + 6], [x - 4, y + 19], [x + 4, y + 19]].forEach(([gx, gy]) => { const a = P(gx, gy, 0), b = P(gx, gy, Z); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); });
-  ground(Z);
-  const g = ctx.createLinearGradient(x - 16, 0, x + 16, 0); g.addColorStop(0, '#dfe5ee'); g.addColorStop(.5, '#ffffff'); g.addColorStop(1, '#cfd8e3');
-  ctx.fillStyle = g; planeShape(x, y); ctx.fill(); ctx.strokeStyle = 'rgba(100,116,139,.45)'; ctx.lineWidth = .35; ctx.stroke();
-  ctx.fillStyle = '#94a3b8'; rr(ctx, x - 10.5, y + 15.5, 3, 5, 1.4); ctx.fill(); rr(ctx, x + 7.5, y + 15.5, 3, 5, 1.4); ctx.fill();
-  ctx.fillStyle = '#1e293b'; rr(ctx, x - 1.7, y + 2, 3.4, 1.8, .9); ctx.fill();
-  ctx.fillStyle = 'rgba(30,41,59,.4)'; for (let i = 0; i < 9; i++) ctx.fillRect(x - .35, y + 6 + i * 2.4, .7, 1);
+// a round body swept along y: one shaded ellipse per slice, far end first
+function tube(cx, y0, y1, cz, radius, lift, light, dark, step = .45) {
+  const g = ctx.createLinearGradient(0, 1.1, 0, -1.1);     // unit-circle space: +1 = top
+  g.addColorStop(0, light); g.addColorStop(.45, shade(light.startsWith('#') ? light : '#ffffff', -.04)); g.addColorStop(1, dark);
+  for (let yy = y0; yy <= y1 + 1e-6; yy += step) {
+    const r = radius(yy - y0); if (r <= .05) continue;
+    const [px, py] = P(cx, yy, cz + lift(yy - y0));
+    const u = cam.s * r;
+    ctx.setTransform(dpr * u * XA, dpr * u * XB, 0, -dpr * u * KZ, dpr * px, dpr * py);
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+  }
   screen();
-  box(x - .7, y + 28, Z, 1.4, 8, 8, shade(tail, .3), tail, shade(tail, -.3));
+}
+// a flat part (wing, tailplane) with a bit of thickness
+function slab(pts, z, t, top, edge) {
+  poly(pts.map(([x, y]) => P(x, y, z - t)), edge);
+  poly(pts.map(([x, y]) => P(x, y, z)), top, 'rgba(100,116,139,.35)', .6);
+}
+function drawPlane(x, y, f) {
+  const tail = TAIL[(f.no || '').slice(0, 2)] || C.alert, Z = 6.5, R = 2.9, L = 38;
+  // shadow
+  ground(0); ctx.fillStyle = 'rgba(15,23,42,.14)'; planeShape(x + 3.5, y + 3.5); ctx.fill(); screen();
+  // landing gear with wheels
+  ctx.strokeStyle = '#475569'; ctx.lineWidth = Math.max(1, cam.s * .5);
+  [[x, y + 5], [x - 4, y + 19], [x + 4, y + 19]].forEach(([gx, gy]) => {
+    const a = P(gx, gy, 0), b = P(gx, gy, Z - R + .5); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+    box(gx - .5, gy - .8, 0, 1, 1.6, 1.2, '#334155', '#1f2937', '#111827');
+  });
+  const body = t => t < 6 ? R * Math.sqrt(Math.max(.04, t / 6)) : t > 29 ? R * (1 - (t - 29) / (L - 29) * .7) : R;
+  const lift = t => t > 27 ? (t - 27) * .2 : 0;
+  const wing = sx => [[x + sx * 2, y + 12], [x + sx * 17, y + 20.5], [x + sx * 17, y + 23], [x + sx * 2, y + 19]];
+  const stab = sx => [[x + sx * 1.5, y + 32], [x + sx * 7.5, y + 35.5], [x + sx * 7.5, y + 37], [x + sx * 1.5, y + 36.5]];
+  const engine = sx => tube(x + sx * 8.5, y + 13, y + 19.5, Z - R - .4, t => t < .8 ? 1.3 + t * .3 : 1.55, () => 0, '#e2e8f0', '#64748b', .4);
+  // far side first (smaller x is further from the viewer)
+  slab(stab(-1), Z + 1.6, .5, '#e5eaf1', '#94a3b8');
+  slab(wing(-1), Z - 1, .8, '#e5eaf1', '#94a3b8');
+  engine(-1);
+  tube(x, y, y + L, Z, body, lift, '#ffffff', '#9aa6b6');
+  // cabin windows and cockpit on the side facing the viewer
+  ctx.fillStyle = 'rgba(30,41,59,.55)';
+  for (let yy = y + 7; yy <= y + 27; yy += 1.6) { const [wx, wy] = P(x + R * .82, yy, Z + .9); ctx.beginPath(); ctx.arc(wx, wy, Math.max(.8, cam.s * .33), 0, Math.PI * 2); ctx.fill(); }
+  poly([P(x - 1.4, y + 1.6, Z + 1.3), P(x + 1.4, y + 1.6, Z + 1.3), P(x + 1.9, y + 3.4, Z + 2.2), P(x - 1.9, y + 3.4, Z + 2.2)], '#1e293b');
+  // airline stripe along the body
+  ctx.strokeStyle = tail; ctx.lineWidth = Math.max(1, cam.s * .45); ctx.beginPath();
+  for (let yy = y + 5; yy <= y + 29; yy += 1) { const [sx, sy] = P(x + R * .98, yy, Z - .4 + lift(yy - y)); yy === y + 5 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy); }
+  ctx.stroke();
+  // near side parts
+  engine(1);
+  slab(wing(1), Z - 1, .8, '#f1f4f8', '#94a3b8');
+  slab(stab(1), Z + 1.6, .5, '#f1f4f8', '#94a3b8');
+  // upright tail fin in the airline colour, with a little thickness
+  const fin = dx => [P(x + dx, y + 28.5, Z + 2 + lift(1.5)), P(x + dx, y + 38, Z + 2.6 + lift(11)), P(x + dx, y + 38.6, Z + 11.5), P(x + dx, y + 35, Z + 11.5)];
+  poly(fin(-.35), shade(tail, -.3));
+  poly(fin(.35), tail, shade(tail, -.35), .6);
 }
 
 // ---------- labels (screen space, always readable) ----------
