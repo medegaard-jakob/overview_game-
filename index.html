@@ -62,7 +62,8 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 #map.dragging { cursor: grabbing; }
 .float { position: absolute; z-index: 2; }
 .card { background: var(--card); border: 1px solid rgba(226,232,240,.9); border-radius: 16px; box-shadow: 0 8px 28px rgba(23,32,51,.08), 0 1px 2px rgba(23,32,51,.05); }
-.kpis { top: 14px; left: 14px; display: grid; grid-template-columns: repeat(4, minmax(0, 205px)); gap: 10px; }
+.kpis { top: 14px; left: 14px; }
+.kgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 205px)); gap: 10px; }
 .kpi { padding: 12px 14px; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 2px 12px; align-items: center; }
 .kpi .ic { grid-row: span 3; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
 .kpi .l { font-size: 12.5px; font-weight: 600; }
@@ -74,7 +75,8 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 .ctrls button:hover { background: #f1f5f9; }
 .ctrls hr { border: 0; border-top: 1px solid var(--line); margin: 3px 4px; }
 
-.detail { top: 14px; right: 14px; width: 356px; padding: 16px; display: grid; gap: 12px; }
+.detail { top: 14px; right: 14px; width: 356px; padding: 16px; }
+.dbody { display: grid; gap: 12px; }
 .dhead { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .avatar { width: 48px; height: 48px; border-radius: 12px; background: #eef4ff; display: grid; place-items: center; }
 .eyebrow { font-size: 11px; font-weight: 700; color: var(--brand); letter-spacing: .06em; text-transform: uppercase; }
@@ -133,10 +135,21 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 .scrub .sl i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 #tl { width: 100%; height: 54px; display: block; cursor: ew-resize; touch-action: none; min-width: 0; }
 
+/* minimise: a small badge on each panel's corner; a minimised panel shrinks to a labelled pill */
+.min { position: absolute; top: -9px; right: -9px; z-index: 3; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: #475569; display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(23,32,51,.12); padding: 0; font: inherit; }
+.min:hover { color: var(--brand); border-color: #c7d7fe; }
+.min span { display: none; }
+.float.collapsed { width: auto !important; height: auto !important; padding: 0 !important; background: transparent; border: 0; box-shadow: none; display: block; right: auto; }
+.float.collapsed.detail, .float.collapsed.lists { right: 14px; }
+.float.collapsed > :not(.min) { display: none !important; }
+.float.collapsed .min { position: static; width: auto; height: 36px; padding: 0 12px 0 10px; border-radius: 12px; display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 700; color: var(--ink); box-shadow: 0 8px 28px rgba(23,32,51,.10); }
+.float.collapsed .min span { display: inline; }
+.stage:has(.detail.collapsed) .ctrls { top: 60px; right: 14px; }
+
 .toast { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); }
 
 @media (max-width: 1280px) {
-  .kpis { grid-template-columns: repeat(2, minmax(0, 190px)); }
+  .kgrid { grid-template-columns: repeat(2, minmax(0, 190px)); }
   .tracking { width: calc(100% - 512px); grid-template-columns: minmax(0, 1fr); }
   .tracking .osum { display: none; }
 }
@@ -178,7 +191,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 <main class="stage" id="stage">
   <canvas id="map" aria-label="Isometric map of Heathrow Terminal 2 stands and the T1 baggage hall with tugs moving ULDs"></canvas>
 
-  <section class="float kpis" id="kpis" aria-label="Today so far"></section>
+  <section class="float kpis" data-panel="kpis" data-title="Today" aria-label="Today so far"><div class="kgrid" id="kpis"></div></section>
 
   <nav class="float card ctrls" aria-label="Map controls">
     <button type="button" id="zin" title="Zoom in"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 3v12M3 9h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
@@ -188,9 +201,9 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
     <button type="button" id="home" title="Reset view (press again for the whole apron)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8.5 9 3l6 5.5V15H3z"/></svg></button>
   </nav>
 
-  <aside class="float card detail" id="detail" aria-live="polite"></aside>
+  <aside class="float card detail" data-panel="detail" data-title="Tug"><div class="dbody" id="detail" aria-live="polite"></div></aside>
 
-  <section class="float card tracking" aria-label="Order tracking">
+  <section class="float card tracking" data-panel="tracking" data-title="Order tracking" aria-label="Order tracking">
     <div>
       <div class="th"><h2><svg width="20" height="20" viewBox="0 0 20 20"><rect x="1" y="6" width="11" height="8" rx="1.5" fill="#2563eb"/><path d="M12 9h4l3 3v2h-7z" fill="#60a5fa"/><circle cx="5" cy="15.5" r="2" fill="#172033"/><circle cx="15" cy="15.5" r="2" fill="#172033"/></svg>Order tracking</h2><span id="trkHead"></span></div>
       <div class="steps" id="steps"></div>
@@ -198,12 +211,12 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
     <div class="osum" id="osum"></div>
   </section>
 
-  <section class="float card lists" aria-label="Live lists">
+  <section class="float card lists" data-panel="lists" data-title="Tugs · Banks · Flights" aria-label="Live lists">
     <div class="tabs" role="tablist" id="tabs"></div>
     <div class="rows" id="rows" role="tabpanel"></div>
   </section>
 
-  <div class="float card scrub">
+  <div class="float card scrub" data-panel="scrub" data-title="Timeline">
     <div class="sl">Deliveries per hour<span><i style="background:#f5a623"></i>Full <i style="background:#14b8a6;margin-left:6px"></i>Empty</span></div>
     <canvas id="tl" aria-label="ULDs delivered per hour, drag to move through time"></canvas>
   </div>
@@ -540,6 +553,27 @@ function statusStyle(st) {           // light-theme pill colours per status
 
 // ---------- helpers ----------
 const $ = id => document.getElementById(id);
+// minimisable panels, remembered per viewer
+let minimised = new Set();
+try { minimised = new Set(JSON.parse(localStorage.getItem('apron-min') || '[]')); } catch (e) { /* storage unavailable */ }
+document.querySelectorAll('[data-panel]').forEach(el => {
+  const b = document.createElement('button'), key = el.dataset.panel;
+  b.type = 'button'; b.className = 'min';
+  const sync = () => {
+    const c = minimised.has(key);
+    el.classList.toggle('collapsed', c);
+    b.title = (c ? 'Show ' : 'Minimise ') + el.dataset.title;
+    b.setAttribute('aria-expanded', String(!c));
+    b.innerHTML = c ? `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 3v8M3 7h8"/></svg><span>${el.dataset.title}</span>`
+                    : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2.5 6h7"/></svg>';
+  };
+  b.onclick = () => {
+    minimised.has(key) ? minimised.delete(key) : minimised.add(key);
+    try { localStorage.setItem('apron-min', JSON.stringify([...minimised])); } catch (e) { /* storage unavailable */ }
+    sync(); if (typeof userMoved !== 'undefined' && !userMoved) cam.fitted = false; if (typeof render === 'function') render(true);
+  };
+  el.prepend(b); sync();
+});
 const fmtT = t => new Date(t * 1000).toISOString().slice(11, 16);
 const fmtD = t => new Date(t * 1000).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
 const dayStart = t => Math.floor(t / 86400) * 86400;
@@ -571,7 +605,10 @@ let overview = false;
 function fit() {
   // frame the baggage hall plus the stands that matter today; Home pressed twice shows the whole area
   const narrow = cw < 980;
-  const top = narrow ? 12 : 118, bottom = narrow ? 12 : 250, left = narrow ? 8 : 16, right = narrow ? 8 : cw > 1280 ? 390 : 24;
+  const m = k => minimised.has(k);     // minimised panels free up their space
+  const top = narrow ? 12 : m('kpis') ? 60 : 118, left = narrow ? 8 : 16;
+  const bottom = narrow ? 12 : !(m('tracking') && m('lists')) ? 250 : m('scrub') ? 60 : 90;
+  const right = narrow ? 8 : cw > 1280 && !m('detail') ? 390 : 24;
   let pts = [[HALL.x0, HALL.y0, 24], [HALL.x1, HALL.y1, 0], [880, 470, 0]];
   if (overview || !stands.length) pts = [[WORLD.x0, WORLD.y0, 0], [WORLD.x1, WORLD.y0, 0], [WORLD.x1, WORLD.y1, 0], [WORLD.x0, WORLD.y1, 0]];
   else stands.forEach(l => { if (!l.nose) return; pts.push([l.nose[0], l.nose[1], 14], [l.nose[0] - l.h[0] * 44, l.nose[1] - l.h[1] * 44, 0]); });
@@ -625,13 +662,15 @@ const BUILDINGS = ML.buildings.map(pts => {
 });
 const HALL_PTS = [[HALL.x0, HALL.y0], [HALL.x1, HALL.y0], [HALL.x1, HALL.y1], [HALL.x0, HALL.y1]];
 // does something at (x, y) sit behind a building, as seen by the camera?
+// returns the building in the way (or null)
+const HALL_B = { pts: HALL_PTS };
 function hidden(x, y) {
   for (let t = 4; t <= 70; t += 6) {
     const qx = x + t * XB * 1.6, qy = y + t * YB * 1.6;
-    if (inPoly(qx, qy, HALL_PTS)) return true;
-    for (const b of BUILDINGS) if (qx >= b.bb[0] && qx <= b.bb[2] && qy >= b.bb[1] && qy <= b.bb[3] && inPoly(qx, qy, b.pts)) return true;
+    if (inPoly(qx, qy, HALL_PTS)) return HALL_B;
+    for (const b of BUILDINGS) if (qx >= b.bb[0] && qx <= b.bb[2] && qy >= b.bb[1] && qy <= b.bb[3] && inPoly(qx, qy, b.pts)) return b;
   }
-  return false;
+  return null;
 }
 function standFrame(l) {        // local (lateral, back-from-nose) -> world
   const [nx, ny] = l.nose, [hx, hy] = l.h;
@@ -692,16 +731,23 @@ function drawTree(x, y, r = 11) {
   gr.addColorStop(0, '#7fdc9a'); gr.addColorStop(1, '#34a868');
   ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(cx, cy, r * cam.s * .85, r * cam.s, 0, 0, Math.PI * 2); ctx.fill();
 }
-function drawBuildings() {
-  [...BUILDINGS].sort((a, b) => a.key - b.key).forEach(b => prism(b.pts, b.h, '#8fb0f4', '#5b82d6'));
+// buildings that hide something (see) are drawn see-through so planes, ULDs and tugs behind them stay readable
+const SEE = .28;
+function drawBuildings(see = new Set()) {
+  [...BUILDINGS].sort((a, b) => a.key - b.key).forEach(b => {
+    ctx.globalAlpha = see.has(b) ? SEE : 1;
+    prism(b.pts, b.h, '#8fb0f4', '#5b82d6');
+  });
   // the T1 baggage hall block with its sawtooth roof and bank doors
   const { x0, y0, x1, y1 } = HALL, h = 24;
+  ctx.globalAlpha = see.has(HALL_B) ? SEE : 1;
   prism(HALL_PTS, h, C.brand, '#1e40af');
   for (let y = y0 + 6; y < y1 - 14; y += 30) {
     poly([P(x0 + 2, y, h), P(x1 - 2, y, h), P(x1 - 2, y + 12, h + 7), P(x0 + 2, y + 12, h + 7)], '#3b82f6');
     poly([P(x0 + 2, y + 12, h + 7), P(x1 - 2, y + 12, h + 7), P(x1 - 2, y + 16, h), P(x0 + 2, y + 16, h)], '#1e40af');
     poly([P(x1 - 2, y, h), P(x1 - 2, y + 12, h + 7), P(x1 - 2, y + 16, h)], '#1d4ed8');
   }
+  ctx.globalAlpha = 1;
   chutes.forEach(l => {
     const d = [[-10, 0, 19, C.brand], [-8, .05, 17, '#5b6a80'], [-8, .1, 13, '#7a879a'], [-5, .15, 7, '#d9a35c']];
     d.forEach(([w, e, hh, c]) => poly([P(x1 + e, l.y + w, 0), P(x1 + e, l.y - w, 0), P(x1 + e, l.y - w, hh), P(x1 + e, l.y + w, hh)], c));
@@ -890,8 +936,8 @@ function frame(T) {
 
   // everything that stands up gets depth-sorted (painter's algorithm)
   const items = [];
-  const push = (x, y, fn) => items.push([x * XB + y * YB, fn, x, y]);
-  TREES.forEach(([x, y]) => push(x, y, () => drawTree(x, y)));
+  const push = (x, y, fn, see = true) => items.push([x * XB + y * YB, fn, x, y, see]);
+  TREES.forEach(([x, y]) => push(x, y, () => drawTree(x, y), false));
   piles.forEach((list, id) => {
     const l = byId[id]; if (l.x == null) return;
     const cap = CAP(l);
@@ -944,10 +990,10 @@ function frame(T) {
   });
 
   // things the terminals hide from this camera angle go first, then the buildings, then the rest
-  const behind = [], front = [];
-  items.forEach(it => (hidden(it[2], it[3]) ? behind : front).push(it));
+  const behind = [], front = [], see = new Set();
+  items.forEach(it => { const b = hidden(it[2], it[3]); if (b && it[4]) see.add(b); (b ? behind : front).push(it); });
   behind.sort((a, b) => a[0] - b[0]).forEach(([, fn]) => fn());
-  drawBuildings();
+  drawBuildings(see);
   front.sort((a, b) => a[0] - b[0]).forEach(([, fn]) => fn());
 
   // signs and ground labels
@@ -959,7 +1005,11 @@ function frame(T) {
     const [x, y] = standFrame(l)(0, 48), on = active.has(l.id);
     if (on || cam.s > 1.4) label(x, y, 0, l.name, { bare: true, fg: on ? '#a16207' : '#94a3b8', size: on ? 12 : 10, weight: on ? 800 : 600, lift: -2 });
   });
-  [['TERMINAL 2B', 1093, 400, 16], ['TERMINAL 2A', 583, 590, 24], ['TERMINAL 1', 560, 300, 24]].forEach(([t, x, y, z]) => label(x, y, z, t, { bare: true, fg: '#ffffff', size: 12, weight: 800, prio: 6 }));
+  // building names, left off a see-through building so they never sit on top of a stand
+  [['TERMINAL 2B', 1100, 600, 16], ['TERMINAL 2A', 583, 590, 24], ['TERMINAL 1', 560, 300, 24]].forEach(([t, x, y, z]) => {
+    const bld = BUILDINGS.find(b => inPoly(x, y, b.pts));
+    if (!bld || !see.has(bld)) label(x, y, z, t, { bare: true, fg: '#ffffff', size: 12, weight: 800, prio: 6 });
+  });
 
   // selection brackets
   const sd = drvById[selected];
