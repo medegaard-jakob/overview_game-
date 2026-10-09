@@ -1,13 +1,13 @@
 """Check that the replay depicts the raw export correctly.
 
-Usage: python3 tools/validate.py <path-to-extracted-Data-folder> [--report validation-report.md] [--no-page] [--page classic.html]
+Usage: python3 tools/validate.py <path-to-extracted-Data-folder> [--report validation-report.md] [--no-page] [--page legacy/pixel.html]
 
 Expected values are recomputed from the raw CSV export (CargoTasks, TransportOrders, Locations,
 Flights, users, Companies). They do not come from data/replay.json, so a bug in build_data.py or
 in the page shows up as a mismatch instead of being copied into the expectation.
 
 Part A compares data/replay.json with the raw export.
-Part B opens index.html headless (tools/snapshot.js) every 15 minutes across the replay and compares what the page
+Part B opens the page (default index.html, the map view) headless (tools/snapshot.js) every 15 minutes across the replay and compares what the page
 shows with the raw export.
 
 Result per check: PASS, WARN (explainable by a documented simplification, e.g. animation catch-up)
@@ -25,7 +25,7 @@ REPORT = sys.argv[sys.argv.index('--report') + 1] if '--report' in sys.argv else
 if REPORT in args:
     args.remove(REPORT)
 RUN_PAGE = '--no-page' not in sys.argv
-PAGE = sys.argv[sys.argv.index('--page') + 1] if '--page' in sys.argv else 'index.html'   # or classic.html
+PAGE = sys.argv[sys.argv.index('--page') + 1] if '--page' in sys.argv else 'index.html'   # or legacy/control-room.html, legacy/pixel.html
 if PAGE in args:
     args.remove(PAGE)
 TOL = 120          # seconds allowed between log timestamps and DB timestamps
@@ -381,7 +381,7 @@ if RUN_PAGE:
           '{bad} overlapping stand allocations; the page can only draw one plane per stand', sorted(set(overlap)), warn_only=True)
 
 # ---------------- C. pages that draw the real layout ----------------
-if PAGE == 'map.html':
+if 'map_layout.js' in open(os.path.join(ROOT, PAGE)).read():
     lay_txt = open(os.path.join(ROOT, 'data', 'map_layout.js')).read()
     layout_stands = json.loads(lay_txt[lay_txt.index('=') + 1:].strip().rstrip(';'))['stands']
     wanted = {l['Name'] for l in locs.values() if l['LocationType'] == 'FlightStand'} | {l['name'] for l in rloc.values() if l['type'] == 'FlightStand'}

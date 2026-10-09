@@ -1,6 +1,6 @@
 ---
 name: replay-validator
-description: Validates that the Baggage Apron Replay (index.html + data/replay.json) depicts the raw GHS export correctly. Use after rebuilding the data from a new export, after changing tools/build_data.py or the page's replay logic, or when someone doubts a number, ULD pile, plane or driver status shown in the game.
+description: Validates that the Baggage Apron Replay (index.html, the map view, + data/replay.json) depicts the raw GHS export correctly. Use after rebuilding the data from a new export, after changing tools/build_data.py or the page's replay logic, or when someone doubts a number, ULD pile, plane or driver status shown in the game.
 tools: Bash, Read, Grep, Glob
 ---
 
@@ -18,7 +18,8 @@ report. You do not change code or data unless the person who called you asks you
 1. Rebuild the replay data so you validate what the export produces:
    `python3 tools/build_data.py <export>`
    If `git diff --stat data/` shows changes, say so: the committed data was stale.
-2. Run the checker: `python3 tools/validate.py <export>`
+2. Run the checker: `python3 tools/validate.py <export>` (main view). Only check a legacy view
+   (`--page legacy/control-room.html` or `legacy/pixel.html`) when asked.
    It needs Node with Playwright (`npm install` in `tools/`). In the Claude Code cloud sandbox,
    Chromium is at `/opt/pw-browsers/chromium`. If Playwright is missing, run with `--no-page` and
    say that the on-screen checks (part B) were skipped.
@@ -27,7 +28,7 @@ report. You do not change code or data unless the person who called you asks you
    the raw timestamps next to what the replay or page shows. Classify each failure as:
    - **export data issue** (the raw data itself is inconsistent),
    - **build bug** (tools/build_data.py transforms it wrongly),
-   - **page bug** (index.html shows it wrongly), or
+   - **page bug** (the page shows it wrongly), or
    - **checker bug** (validate.py assumes something the data doesn't mean).
    Before calling something a page or build bug, double-check what the raw field actually means.
    For example, CargoTasks.ActualStartTime is when the driver *accepted* the order, not when the
@@ -38,8 +39,7 @@ report. You do not change code or data unless the person who called you asks you
    - run `node tools/snapshot.js index.html <req.json> <out.json>` with one moment between
      collection and delivery and one just after delivery. Confirm the driver shows a Full/Empty run
      with the right order, and that the ULDs then appear at the drop-off.
-5. The script now checks full ULDs at the banks, ULD piles at the stands and (for `--page map.html`) that every
-   stand has a map position. Still check the modelling rules it does not cover yet, against raw rows (use
+5. The script now checks full ULDs at the banks, ULD piles at the stands and that every stand has a map position. Still check the modelling rules it does not cover yet, against raw rows (use
    `window.apronDebug.snapshot(t, org)` via tools/snapshot.js, whose `piles` field gives full/empty
    ULDs per location name):
    - **Banks:** an empty ULD delivered to a bank turns full when the next full ULD at that bank
