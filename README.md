@@ -15,6 +15,12 @@ and flights. Drag to pan, scroll or use the buttons to zoom, click a tug to foll
 The layout comes from `data/map_layout.js`, built by `tools/build_map_layout.py` from the UK AIP chart
 AD 2-EGLL-2-7 (stand coordinate table and terminal outlines). The chart itself is not stored.
 
+**Weather.** The top row shows the real Heathrow weather for the moment you're watching (temperature, conditions,
+wind, visibility below 10 km), the map gets darker at night, hazy in low visibility and shows rain when it rained,
+a windsock by the hall shows the wind, and the timeline marks night hours and rain reports. The data comes from
+`data/weather.js`, built by `python3 tools/build_weather.py` from the EGLL METAR reports (Iowa Environmental Mesonet)
+and the Open-Meteo historical archive (hourly cloud cover, sunrise and sunset).
+
 ### Legacy views (kept for reference, not developed further)
 
 - `legacy/control-room.html`: the 3D control room on a schematic apron (the earlier main view).
