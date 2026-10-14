@@ -776,14 +776,14 @@ const mat = {
 const nightMats = [];   // materials that glow at night: [material, max intensity]
 
 // world bounds (map metres: x east, y south) -> three: X = x, Z = y, Y up
-const GX0 = 40, GY0 = -500, GX1 = 2140, GY1 = 920;
+const GX0 = -140, GY0 = -500, GX1 = 2160, GY1 = 1060;
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), mat.grass);
 ground.rotation.x = -Math.PI / 2; ground.position.set(1100, -.05, 200); ground.receiveShadow = true; scene.add(ground);
 
 // one painted ground texture: apron, roads, taxi lines, stand markings, runway paint
 const GW = GX1 - GX0, GH = GY1 - GY0;
 const gcan = document.createElement('canvas');
-const GPX = isPhone() ? 1.45 : 1.95;                 // pixels per metre
+const GPX = Math.min(isPhone() ? 1.3 : 1.95, 4096 / (GX1 - GX0), 4096 / (GY1 - GY0));   // pixels per metre, within GPU texture limits
 gcan.width = Math.round(GW * GPX); gcan.height = Math.round(GH * GPX);
 const gtex = new THREE.CanvasTexture(gcan);
 gtex.encoding = THREE.sRGBEncoding; gtex.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -800,54 +800,47 @@ const OBST = ML.buildings.concat([HALL_PTS], yards.map(l => [[l.yard.x0, l.yard.
 function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy || 1, t = clamp(((px - ax) * dx + (py - ay) * dy) / L, 0, 1); return Math.hypot(px - ax - t * dx, py - ay - t * dy); }
 function polyDist(x, y, pts) { if (inPoly(x, y, pts)) return 0; let d = Infinity; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; d = Math.min(d, segDist(x, y, a[0], a[1], b[0], b[1])); } return d; }
 const RWY = { y: -430, x0: 140, x1: 2060, w: 46 };
-const CELL = 15, AX0 = -120, AY0 = -520, ANX = 160, ANY = 98;
-const blocked = new Uint8Array(ANX * ANY), penalty = new Uint8Array(ANX * ANY);
-const standRects = allStands.filter(l => l.nose).map(l => { const F = standFrame(l); return [F(-21, -3), F(21, -3), F(21, 50), F(-21, 50)]; });
-for (let j = 0; j < ANY; j++) for (let i = 0; i < ANX; i++) {
-  const x = AX0 + (i + .5) * CELL, y = AY0 + (j + .5) * CELL;
-  let b = false;
-  for (const p of OBST) { if (polyDist(x, y, p) < 22) { b = true; break; } }
-  blocked[j * ANX + i] = b ? 1 : 0;
-  if (!b) for (const r of standRects) if (polyDist(x, y, r) < 4) { penalty[j * ANX + i] = 1; break; }
-}
 function standFrame(l) { const [nx, ny] = l.nose, [hx, hy] = l.h; return (lx, ly) => [nx - hx * ly - hy * lx, ny - hy * ly + hx * lx]; }
-const cellOf = (x, y) => [clamp(Math.floor((x - AX0) / CELL), 0, ANX - 1), clamp(Math.floor((y - AY0) / CELL), 0, ANY - 1)];
-function astar(a, b) {
-  const [si, sj] = cellOf(a[0], a[1]), [gi, gj] = cellOf(b[0], b[1]);
-  const N = ANX * ANY, g = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
-  const heap = []; const push = (k, f) => { heap.push([f, k]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
-  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
-  const s = sj * ANX + si, goal = gj * ANX + gi; g[s] = 0; push(s, 0);
-  const D8 = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
-  while (heap.length) {
-    const [, k] = pop(); if (closed[k]) continue; closed[k] = 1; if (k === goal) break;
-    const i = k % ANX, j = (k / ANX) | 0;
-    for (const [di, dj, w] of D8) {
-      const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= ANX || nj >= ANY) continue;
-      const n = nj * ANX + ni; if (closed[n]) continue;
-      if (blocked[n] && n !== goal && n !== s) continue;
-      const c = g[k] + w * (penalty[n] ? 6 : 1);
-      if (c < g[n]) { g[n] = c; prev[n] = k; push(n, c + Math.hypot(ni - gi, nj - gj)); }
-    }
+// ---------- the official taxiway network (centre lines traced from the AIP chart, data/map_layout.js) ----------
+const TX = ML.taxi || { nodes: [], edges: [] }, TN = TX.nodes, TADJ = TN.map(() => []);
+TX.edges.forEach(([a, b]) => { const w = Math.hypot(TN[a][0] - TN[b][0], TN[a][1] - TN[b][1]); TADJ[a].push([b, w]); TADJ[b].push([a, w]); });
+const MAIN = (() => {          // the connected network; stand lead-in lines on the chart stand apart from it
+  const comp = new Int32Array(TN.length).fill(-1); let best = [];
+  for (let i = 0; i < TN.length; i++) {
+    if (comp[i] >= 0) continue;
+    const list = [i]; comp[i] = i;
+    for (let k = 0; k < list.length; k++) for (const [v] of TADJ[list[k]]) if (comp[v] < 0) { comp[v] = i; list.push(v); }
+    if (list.length > best.length) best = list;
   }
-  if (prev[goal] < 0 && goal !== s) return [a, b];
-  const cells = []; for (let k = goal; k >= 0; k = prev[k]) { cells.unshift(k); if (k === s) break; }
-  const pts = cells.map(k => [AX0 + ((k % ANX) + .5) * CELL, AY0 + (((k / ANX) | 0) + .5) * CELL]);
-  pts[0] = a; pts[pts.length - 1] = b;
-  // string-pull: keep only the corners we need
-  const clear = (p, q) => { const L = Math.hypot(q[0] - p[0], q[1] - p[1]), n = Math.ceil(L / 5); for (let t = 1; t < n; t++) { const [i, j] = cellOf(lerp(p[0], q[0], t / n), lerp(p[1], q[1], t / n)), c = j * ANX + i; if (blocked[c] || penalty[c]) return false; } return true; };
-  const out = [pts[0]]; let i = 0;
-  while (i < pts.length - 1) { let j = pts.length - 1; while (j > i + 1 && !clear(pts[i], pts[j])) j--; out.push(pts[j]); i = j; }
-  return out;
+  return best;
+})();
+const nearestMain = (x, y) => { let b = -1, d = Infinity; for (const i of MAIN) { const e = (TN[i][0] - x) ** 2 + (TN[i][1] - y) ** 2; if (e < d) { d = e; b = i; } } return b; };
+function taxiRoute(a, b) {     // shortest path along the taxiway centre lines
+  const dist = new Float64Array(TN.length).fill(Infinity), prev = new Int32Array(TN.length).fill(-1), heap = [[0, a]];
+  dist[a] = 0;
+  const push = (d, k) => { heap.push([d, k]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  while (heap.length) {
+    const [d, u] = pop(); if (d > dist[u]) continue; if (u === b) break;
+    for (const [v, w] of TADJ[u]) if (d + w < dist[v]) { dist[v] = d + w; prev[v] = u; push(d + w, v); }
+  }
+  const out = []; for (let u = b; u >= 0; u = prev[u]) { out.unshift(TN[u]); if (u === a) break; }
+  return out[0] === TN[a] ? out : [TN[a], TN[b]];
 }
+// links from the north taxiways up to the runway, and a parallel taxiway along it
+const LINK = { w: nearestMain(300, -110), e: nearestMain(1400, -260) };
+const PAR_Y = -355;   // parallel taxiway, 75 m south of the runway centre line
+
 // smooth a corner path into a sampled curve with arc length
 function curve(pts, step = 4) {
-  let P = pts;
-  if (pts.length > 2) {
-    const v = pts.map(([x, y]) => new THREE.Vector3(x, 0, y));
-    const c = new THREE.CatmullRomCurve3(v, false, 'centripetal', .5), len = c.getLength();
-    P = c.getSpacedPoints(Math.max(2, Math.ceil(len / step))).map(p => [p.x, p.z]);
+  // round the corners (two passes of corner cutting), then measure arc length
+  let P = pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > .5);
+  for (let it = 0; it < 2 && P.length > 2; it++) {
+    const Q = [P[0]];
+    for (let i = 0; i < P.length - 1; i++) { const [ax, ay] = P[i], [bx, by] = P[i + 1]; Q.push([ax * .75 + bx * .25, ay * .75 + by * .25], [ax * .25 + bx * .75, ay * .25 + by * .75]); }
+    Q.push(P[P.length - 1]); P = Q;
   }
+  if (P.length < 2) P = [pts[0], pts[pts.length - 1]];
   const cum = [0]; for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
   return { pts: P, cum, len: cum[cum.length - 1] };
 }
@@ -859,23 +852,25 @@ function along(c, s) {
 }
 // the runway in use follows the real wind: westerlies land and depart on 27R (westbound), easterlies on 09L
 const rwyDir = T => { const w = wxAt(T); if (!w || w.dir == null || (w.kt ?? 0) < 4) return -1; return w.dir > 0 && w.dir < 180 ? 1 : -1; };
-function runwayPts(dir) {   // touchdown, exit, line-up and lift-off points for each direction
-  return dir < 0 ? { thr: RWY.x1 - 60, td: RWY.x1 - 360, exit: RWY.x1 - 1760, line: RWY.x1 - 40, lift: RWY.x1 - 1540 }
-                 : { thr: RWY.x0 + 60, td: RWY.x0 + 360, exit: RWY.x0 + 1760, line: RWY.x0 + 40, lift: RWY.x0 + 1540 };
+function runwayPts(dir) {   // touchdown, exit, line-up and lift-off points; landings turn off at the link on their side
+  const lw = TN[LINK.w] || [300], le = TN[LINK.e] || [1400];
+  return dir < 0 ? { thr: RWY.x1 - 60, td: RWY.x1 - 360, exit: lw[0] + 80, link: LINK.w, line: RWY.x1 - 40, lift: RWY.x1 - 1540 }
+                 : { thr: RWY.x0 + 60, td: RWY.x0 + 360, exit: le[0] - 80, link: LINK.e, line: RWY.x0 + 40, lift: RWY.x0 + 1540 };
 }
-const pathCache = new Map(), astarCache = new Map();
+const pathCache = new Map(), routeCacheT = new Map();
+const cachedRoute = (a, b) => { const k = a + '>' + b; if (!routeCacheT.has(k)) routeCacheT.set(k, taxiRoute(a, b)); return routeCacheT.get(k); };
 function taxiPaths(l, dirIn, dirOut) {
   const key = l.id + dirIn + dirOut;
   if (pathCache.has(key)) return pathCache.get(key);
-  const F = standFrame(l), S = F(0, 2), Lp = F(0, 70);
+  const F = standFrame(l), S = F(0, 2), Lp = F(0, 62), entry = nearestMain(...F(0, 78));
   const ri = runwayPts(dirIn), ro = runwayPts(dirOut);
-  const exitPt = [ri.exit, RWY.y], exitOff = [ri.exit + dirIn * 40, RWY.y + 50];
-  const hold = [ro.line - dirOut * 30, RWY.y + 70], line = [ro.line, RWY.y];
-  const kIn = l.id + 'i' + dirIn, kOut = l.id + 'o' + dirOut;
-  if (!astarCache.has(kIn)) astarCache.set(kIn, astar(exitOff, Lp));
-  if (!astarCache.has(kOut)) astarCache.set(kOut, astar(Lp, hold));
-  const inner = astarCache.get(kIn), outer = astarCache.get(kOut);
-  const res = { S, L: Lp, inC: curve([exitPt, ...inner, S]), outC: curve([...outer, [ro.line + dirOut * 10, RWY.y + 30], line]), ri, ro };
+  // in: runway turn-off -> link -> taxiways -> stand lead-in line -> stop
+  const li = TN[ri.link];
+  const inPts = [[ri.exit, RWY.y], [ri.exit - dirIn * 40, RWY.y + 40], [li[0], PAR_Y + 30], ...cachedRoute(ri.link, entry), Lp, S];
+  // out: pushed back onto the taxilane -> taxiways -> link -> parallel taxiway -> runway end
+  const lo = TN[ro.link];
+  const outPts = [TN[entry], ...cachedRoute(entry, ro.link).slice(1), [lo[0], PAR_Y], [ro.line - dirOut * 60, PAR_Y], [ro.line - dirOut * 10, RWY.y + 25], [ro.line, RWY.y]];
+  const res = { S, L: Lp, entry: TN[entry], pushLen: Math.hypot(S[0] - Lp[0], S[1] - Lp[1]), inC: curve(inPts, 3), outC: curve(outPts, 3), ri, ro };
   pathCache.set(key, res); return res;
 }
 // a flight's movements: approach, roll-out, taxi in, on stand, pushback, taxi out, take-off
@@ -907,7 +902,7 @@ function planePose(pl, T) {
   if (T < pl.inn) { const p = along(inC, (T - pl.tExit) * TAXI); return { ...p, z: 0, gear: 1, phase: 'Taxi in' }; }
   if (T < pl.out) return { x: S[0], y: S[1], z: 0, yaw: hyaw, gear: 1, phase: 'On stand' };
   if (T < pl.tTaxi) {    // pushback straight out of the stand, then turned onto the taxilane
-    const t = clamp((T - pl.out) / 60, 0, 1), s = ease(t) * 68;
+    const t = clamp((T - pl.out) / 60, 0, 1), s = ease(t) * (pl.pushLen + Math.hypot(pl.L[0] - pl.entry[0], pl.L[1] - pl.entry[1]));
     const x = S[0] - l.h[0] * s, y = S[1] - l.h[1] * s;
     const turn = clamp((T - pl.out - 45) / 40, 0, 1), y0 = outC.pts.length > 1 ? along(outC, 8).yaw : hyaw;
     let dy = y0 - hyaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI;
@@ -928,6 +923,17 @@ function paintGround(active) {
   g.clearRect(GX0, GY0, GW, GH);
   // apron concrete with soft slab joints
   const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); };
+  // taxiways: paved bands under every connected centre line, plus the links and the parallel taxiway
+  g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#cdd3d8'; g.lineWidth = 34;
+  const band = pts => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); };
+  const inMain = new Uint8Array(TN.length); MAIN.forEach(i => inMain[i] = 1);
+  TX.edges.forEach(([a, b]) => { if (inMain[a]) band([TN[a], TN[b]]); });
+  const extras = [];
+  if (TN[LINK.w] && TN[LINK.e]) {
+    [LINK.w, LINK.e].forEach(k => extras.push([TN[k], [TN[k][0], PAR_Y]], [[TN[k][0], PAR_Y], [TN[k][0], RWY.y]]));
+    extras.push([[RWY.x0 + 30, PAR_Y], [RWY.x1 - 30, PAR_Y]], [[RWY.x0 + 30, PAR_Y], [RWY.x0 + 10, RWY.y]], [[RWY.x1 - 30, PAR_Y], [RWY.x1 - 10, RWY.y]]);
+  }
+  extras.forEach(band);
   g.fillStyle = '#d4dadf'; rr(330, -40, 1330, 940, 26); g.fill();
   g.fillStyle = '#d4dadf'; rr(1500, 300, 600, 600, 26); g.fill();
   g.strokeStyle = 'rgba(60,80,100,.08)'; g.lineWidth = .6;
@@ -959,7 +965,7 @@ function paintGround(active) {
     g.beginPath(); c.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath();
     if (on) { g.fillStyle = 'rgba(255,255,255,.6)'; g.fill(); }
     g.strokeStyle = on ? 'rgba(0,157,224,.95)' : 'rgba(60,80,100,.22)'; g.lineWidth = on ? .8 : .5; g.stroke();
-    g.beginPath(); const a = F(0, 0), b = F(0, 70); g.moveTo(...a); g.lineTo(...b);
+    g.beginPath();
     g.strokeStyle = on ? 'rgba(0,78,112,.85)' : 'rgba(60,80,100,.2)'; g.lineWidth = on ? 1 : .5; g.stroke();
     const s1 = F(-5, 1), s2 = F(5, 1); g.beginPath(); g.moveTo(...s1); g.lineTo(...s2); g.lineWidth = on ? 1.4 : .7; g.stroke();
     const [tx, ty] = F(0, 40);
@@ -1377,7 +1383,7 @@ function select(kind, id, glide) {
 function posOf(s) {
   if (!s) return null;
   if (s.kind === 'tug') { const d = drvById[s.id]; return d?._p ? { x: d._p.x, y: d._p.y, z: 4, r: 6 } : null; }
-  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[f.stand]; if (l?.nose) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
+  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[f.stand]; if (l?.nose && lastRes?.planeAt.get(l.id)?.id === f.id) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
   const l = byId[s.id]; if (!l) return null;
   if (s.kind === 'stand' && l.nose) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 26 }; }
   if (l.yard) return { x: (l.yard.x0 + l.yard.x1) / 2, y: (l.yard.y0 + l.yard.y1) / 2, z: 6, r: 40 };
@@ -1633,6 +1639,8 @@ function renderPanels(T, res, force) {
   $('alN').hidden = !al.length; $('alN').textContent = al.length;
   $('dnBtn').innerHTML = { auto: `${WXI.auto}<span>Auto</span>`, day: `${WXI.sun}<span>Day</span>`, night: `${WXI.moon}<span>Night</span>` }[dnMode];
   if (!$('wxPop').hidden) renderWx(T); if (!$('alPop').hidden) renderAlerts(T, al);
+  // a selected flight lets go when the replay moves well away from it (another day, or long gone)
+  if (sel?.kind === 'flight') { const f = flights[sel.id], out = f && (f.etd || f.std), inn = f && (f.sta || out - 150 * 60); if (!f || T < inn - 3 * 3600 || T > out + 3600) { sel = null; follow = null; } }
   // default selection: the first tug doing something
   if (!sel || (sel.kind === 'tug' && !inOrg(drvById[sel.id]?.company))) {
     const s = res.states.find(s => !['off', 'idle'].includes(s.st.k)) || res.states.find(s => s.st.k !== 'off');
@@ -1679,7 +1687,7 @@ function renderDetail(T, res) {
   } else if (sel.kind === 'flight') {
     const f = flights[sel.id], l = byId[f.stand], I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
     const ph = { 'On stand': ['var(--ok-soft)', 'var(--ok)'], 'Pushback': ['var(--info-soft)', 'var(--info)'] }[I.phase] || ['var(--chip)', 'var(--muted)'];
-    el.innerHTML = head(`<span style="color:${TAILC[String(f.no).slice(0, 2)] || 'var(--accent)'}">${ICON.plane}</span>`, airlineOf(f.no), esc(f.no), `Stand ${esc(l?.name ?? '—')} · ${esc(f.status || 'Scheduled')}`) + `
+    el.innerHTML = head(`<span style="color:${TAILC[String(f.no).slice(0, 2)] || 'var(--accent)'}">${ICON.plane}</span>`, airlineOf(f.no), esc(f.no), `${fmtD(f.etd || f.std)} · stand ${esc(l?.name ?? '—')} · ${esc(f.status || 'Scheduled')}`) + `
       <div class="state">${pill(I.phase, ph[0], ph[1])}${I.urgent ? pill(`${I.urgent} urgent`, 'var(--alert)', '#fff') : ''}<span>${left >= 0 ? `Departs in ${left} min` : `Departed ${-left} min ago`}</span></div>
       <div class="kv"><span>On stand</span><strong class="m">${f.sta ? fmtT(f.sta) : `~${fmtT(I.inn)}`}</strong>
         <span>Departure</span><strong class="m">${fmtT(I.out)}${f.etd && f.std && f.etd !== f.std ? ` (STD ${fmtT(f.std)})` : ''}</strong>
@@ -1733,7 +1741,7 @@ function renderTracker(T, res) {
   if (f) {
     const I = flightInfo(f, T), dels = I.ts.filter(t => t.del).map(t => t.del).sort((a, b) => a - b);
     $('trkTitle').textContent = `Turnaround · ${f.no}`;
-    $('trkHead').textContent = `stand ${byId[f.stand]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
+    $('trkHead').textContent = `${fmtD(I.out)} · stand ${byId[f.stand]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
     $('steps').innerHTML = steps([['On stand', I.inn, STEPI.stand], ['First ULD', dels[0], STEPI.box], ['Last ULD', dels[dels.length - 1], STEPI.ok], ['Pushback', I.out, STEPI.go]], T, false);
     const pending = I.ts.filter(t => !(t.del && t.del <= T) && !(t.can && t.can <= T)).length;
     $('tsum').innerHTML = `<span><b>${I.del.length}</b> of ${I.ts.length} ULDs delivered</span><span><b>${pending}</b> still to come</span><span style="color:${I.late.length ? 'var(--alert)' : 'inherit'}"><b>${I.late.length}</b> late</span><span>${I.phase}</span>`;
@@ -1975,6 +1983,8 @@ window.apronDebug = {
     };
   },
   range: () => ({ tMin, tMax }),
+  // aircraft routes for checking: [stand name, route in, route out] for both runway directions
+  taxiRoutes: () => allStands.filter(l => l.nose).flatMap(l => [-1, 1].map(d => { const p = taxiPaths(l, d, d); return [l.name, d, p.inC.pts, p.outC.pts]; })),
 };
 
 resize();
