@@ -150,25 +150,25 @@ for dr in page.get_drawings():
             n = max(1, int(math.dist(*line) // 20))
             taxi_lines.append([(line[0][0] + (line[1][0] - line[0][0]) * k / n, line[0][1] + (line[1][1] - line[0][1]) * k / n) for k in range(n + 1)])
         continue
-    pts = []
+    # trace each ribbon outline (a drawing can hold several); the two edges are under 2 m apart and merge when snapped
+    subs, pts = [], []
     for it in dr['items']:
-        if it[0] == 'l':
-            a, b = it[1], it[2]
-            if abs(a.x - b.x) + abs(a.y - b.y) < 1.2:          # the ribbon's end cap: one edge traced
-                if len(pts) > 1: break
-                continue
-            if not pts: pts.append(a)
-            pts.append(b)
-        elif it[0] == 'c':
-            if not pts: pts.append(it[1])
-            pts += list(bezier(it[1], it[2], it[3], it[4]))
-    m = [to_m(p * R) for p in pts]
-    line = [m[0]] if m else []
-    for q in m[1:]:
-        if math.dist(q, line[-1]) >= 3: line.append(q)
-    if len(line) > 1 and math.dist(m[-1], line[-1]) > .5: line.append(m[-1])
-    if len(line) < 2 or sum(math.dist(line[i], line[i + 1]) for i in range(len(line) - 1)) < 15: continue   # holding marks, arrows
-    taxi_lines.append(line)
+        if it[0] not in ('l', 'c'): continue
+        start = it[1]
+        if pts and abs(start.x - pts[-1].x) + abs(start.y - pts[-1].y) > .8: subs.append(pts); pts = []
+        if not pts: pts.append(start)
+        pts += [it[2]] if it[0] == 'l' else list(bezier(it[1], it[2], it[3], it[4]))
+    if pts: subs.append(pts)
+    for pts in subs:
+        m = [to_m(p * R) for p in pts]
+        if len(m) < 2: continue
+        xs = [p[0] for p in m]; ys = [p[1] for p in m]
+        if math.hypot(max(xs) - min(xs), max(ys) - min(ys)) < 15: continue      # holding marks, arrows
+        line = [m[0]]
+        for q in m[1:]:
+            if math.dist(q, line[-1]) >= 3: line.append(q)
+        if math.dist(line[-1], line[0]) < 6: line.append(line[0])           # close the ribbon only across its end cap
+        taxi_lines.append(line)
 nodes, node_at, edges = [], {}, set()
 def node(p, tol=3.0):
     k = (round(p[0] / tol), round(p[1] / tol))
@@ -177,8 +177,14 @@ def node(p, tol=3.0):
             for i in node_at.get((k[0] + dx, k[1] + dy), []):
                 if math.dist(nodes[i], p) < tol: return i
     nodes.append(list(p)); node_at.setdefault(k, []).append(len(nodes) - 1); return len(nodes) - 1
+def densify(line, step=10):       # a point every 10 m, so stands and crossings attach where they meet a straight section
+    out = [line[0]]
+    for p, q in zip(line, line[1:]):
+        n = max(1, int(math.dist(p, q) // step))
+        out += [(p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n) for k in range(1, n + 1)]
+    return out
 for line in taxi_lines:
-    ids = [node(p) for p in line]
+    ids = [node(p) for p in densify(line)]
     for a, b in zip(ids, ids[1:]):
         if a != b: edges.add((min(a, b), max(a, b)))
 # join loose ends (lead-ins meeting a taxilane, small gaps) to the nearest edge within 12 m
