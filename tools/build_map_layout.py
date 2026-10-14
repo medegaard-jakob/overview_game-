@@ -130,11 +130,81 @@ roads = [
     [[1128, 40], [1128, 800]],                   # T2B east face
     [[1420, 40], [1420, 800]],                   # remote 251-258 line
 ]
+# ---- taxiway centre lines: the yellow ribbons on the chart, traced along one edge, joined into a graph ----
+def is_yellow(f): return f and abs(f[0] - .97) < .03 and abs(f[1] - .905) < .03 and abs(f[2] - .215) < .03
+def bezier(p0, p1, p2, p3, n=8):
+    for k in range(1, n + 1):
+        t = k / n; u = 1 - t
+        yield fitz.Point(u**3 * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t**3 * p3.x, u**3 * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t**3 * p3.y)
+taxi_lines = []
+for dr in page.get_drawings():
+    if not is_yellow(dr.get('fill')): continue
+    rects = [it[1] for it in dr['items'] if it[0] == 're']
+    if rects:   # straight taxiway sections are thin rectangles; near-square boxes are signs
+        for r in rects:
+            q = [to_m(p * R) for p in (r.tl, r.tr, r.br, r.bl)]
+            w, h = math.dist(q[0], q[1]), math.dist(q[1], q[2])
+            if max(w, h) < 15 or max(w, h) < 6 * min(w, h): continue
+            line = [((q[0][0] + q[3][0]) / 2, (q[0][1] + q[3][1]) / 2), ((q[1][0] + q[2][0]) / 2, (q[1][1] + q[2][1]) / 2)] if w > h else \
+                   [((q[0][0] + q[1][0]) / 2, (q[0][1] + q[1][1]) / 2), ((q[3][0] + q[2][0]) / 2, (q[3][1] + q[2][1]) / 2)]
+            n = max(1, int(math.dist(*line) // 20))
+            taxi_lines.append([(line[0][0] + (line[1][0] - line[0][0]) * k / n, line[0][1] + (line[1][1] - line[0][1]) * k / n) for k in range(n + 1)])
+        continue
+    pts = []
+    for it in dr['items']:
+        if it[0] == 'l':
+            a, b = it[1], it[2]
+            if abs(a.x - b.x) + abs(a.y - b.y) < 1.2:          # the ribbon's end cap: one edge traced
+                if len(pts) > 1: break
+                continue
+            if not pts: pts.append(a)
+            pts.append(b)
+        elif it[0] == 'c':
+            if not pts: pts.append(it[1])
+            pts += list(bezier(it[1], it[2], it[3], it[4]))
+    m = [to_m(p * R) for p in pts]
+    line = [m[0]] if m else []
+    for q in m[1:]:
+        if math.dist(q, line[-1]) >= 3: line.append(q)
+    if len(line) > 1 and math.dist(m[-1], line[-1]) > .5: line.append(m[-1])
+    if len(line) < 2 or sum(math.dist(line[i], line[i + 1]) for i in range(len(line) - 1)) < 15: continue   # holding marks, arrows
+    taxi_lines.append(line)
+nodes, node_at, edges = [], {}, set()
+def node(p, tol=3.0):
+    k = (round(p[0] / tol), round(p[1] / tol))
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for i in node_at.get((k[0] + dx, k[1] + dy), []):
+                if math.dist(nodes[i], p) < tol: return i
+    nodes.append(list(p)); node_at.setdefault(k, []).append(len(nodes) - 1); return len(nodes) - 1
+for line in taxi_lines:
+    ids = [node(p) for p in line]
+    for a, b in zip(ids, ids[1:]):
+        if a != b: edges.add((min(a, b), max(a, b)))
+# join loose ends (lead-ins meeting a taxilane, small gaps) to the nearest edge within 12 m
+deg = collections.Counter(i for e in edges for i in e)
+for i in [i for i in range(len(nodes)) if deg[i] == 1]:
+    p = np.array(nodes[i]); best = None
+    for a, b in edges:
+        if i in (a, b): continue
+        A, B = np.array(nodes[a]), np.array(nodes[b]); ab = B - A; L = np.dot(ab, ab)
+        t = 0 if L == 0 else max(0, min(1, np.dot(p - A, ab) / L)); q = A + t * ab; d = np.linalg.norm(p - q)
+        if d < 12 and (best is None or d < best[0]): best = (d, a, b, t, q)
+    if not best: continue
+    d, a, b, t, q = best
+    if t < .02: edges.add((min(i, a), max(i, a)))
+    elif t > .98: edges.add((min(i, b), max(i, b)))
+    else:
+        nodes.append([float(q[0]), float(q[1])]); k = len(nodes) - 1
+        edges.discard((min(a, b), max(a, b))); edges |= {(min(a, k), max(a, k)), (min(b, k), max(b, k)), (min(i, k), max(i, k))}
+used = sorted({i for e in edges for i in e}); remap = {o: n for n, o in enumerate(used)}
+taxi = {'nodes': [[round(nodes[i][0], 1), round(nodes[i][1], 1)] for i in used], 'edges': sorted([remap[a], remap[b]] for a, b in edges)}
+
 # T1 baggage hall: a dock face on the east side of T1 with one door per bank / store
 hall = {'x0': 690, 'x1': 752, 'y0': 280, 'y1': 470}
 layout = {'source': 'UK AIP AD 2-EGLL-2-7 (Heathrow T1/T2 ground movement chart)', 'units': 'metres', 'stands': stands,
-          'buildings': buildings, 'roads': roads, 'hall': hall}
+          'buildings': buildings, 'roads': roads, 'hall': hall, 'taxi': taxi}
 out = os.path.join(os.path.dirname(__file__), '..', 'data', 'map_layout.js')
 open(out, 'w').write('window.MAP_LAYOUT=' + json.dumps(layout, separators=(',', ':')) + ';\n')
-print(len(stands), 'stands,', len(buildings), 'buildings,', sum(len(b) for b in buildings), 'points →', os.path.relpath(out))
+print(len(stands), 'stands,', len(buildings), 'buildings,', sum(len(b) for b in buildings), 'points,', len(taxi['nodes']), 'taxi nodes,', len(taxi['edges']), 'taxi edges →', os.path.relpath(out))
 print({k: (v['hx'], v['hy']) for k, v in stands.items() if k in ('209', '211', '213', '216', '221', '231', '241', '251', '258')})
