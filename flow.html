@@ -950,10 +950,6 @@ function paintGround(active) {
   g.translate(RWY.x0 + 60, RWY.y); g.rotate(Math.PI / 2); g.fillText('09L', 0, 0); g.restore();
   g.save(); g.font = '800 18px Archivo, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.translate(RWY.x1 - 60, RWY.y); g.rotate(-Math.PI / 2); g.fillText('27R', 0, 0); g.restore();
-  // taxiway centre lines exactly as on the chart, with the stand lead-in lines
-  g.strokeStyle = 'rgba(214,166,0,.9)'; g.lineWidth = .9;
-  TX.edges.forEach(([a, b]) => { g.beginPath(); g.moveTo(...TN[a]); g.lineTo(...TN[b]); g.stroke(); });
-  extras.forEach(([a, b]) => { g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); });
   // airside service roads
   ROADS.forEach(r => {
     const [x0, x1] = [Math.min(r.a[0], r.b[0]), Math.max(r.a[0], r.b[0])], [y0, y1] = [Math.min(r.a[1], r.b[1]), Math.max(r.a[1], r.b[1])];
