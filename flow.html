@@ -1226,7 +1226,8 @@ const dollyGeo = mergeParts([
   [B(1.15, .07, .07), '#3a4249', 1.75, .36, 0, -.08],
 ]);
 // ULDs as instanced meshes: full (orange), empty (off-white), plus urgent tags; dollies too
-const uldGeo = (() => { const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(2, 0); s.lineTo(2, 2); s.lineTo(.6, 2); s.lineTo(0, 1.35); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: 1.9, bevelEnabled: false }); g.translate(-1, 0, -.95); return g; })();
+// AKE container: flat top, narrower base, slanted lower contour on one side
+const uldGeo = (() => { const s = new THREE.Shape(); s.moveTo(.55, 0); s.lineTo(2, 0); s.lineTo(2, 2); s.lineTo(0, 2); s.lineTo(0, 1.25); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: 1.9, bevelEnabled: false }); g.translate(-1, 0, -.95); return g; })();
 const CAPU = 1800;
 const uFull = new THREE.InstancedMesh(uldGeo, mat.uldFull, CAPU), uEmpty = new THREE.InstancedMesh(uldGeo, mat.uldEmpty, CAPU);
 const uTag = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.7, 0), mat.red, 400);
