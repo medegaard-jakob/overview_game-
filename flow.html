@@ -1124,9 +1124,12 @@ function logoTexture(no) {
 const PG = (() => {
   const body = new THREE.CylinderGeometry(2.1, 2.1, 30, 24, 1, true); body.rotateZ(-Math.PI / 2);
   const nose = new THREE.SphereGeometry(2.1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2); nose.rotateZ(-Math.PI / 2); nose.scale(2.2, 1, 1); nose.translate(15, 0, 0);
-  const tail = new THREE.CylinderGeometry(.45, 2.1, 7.5, 24, 1, true); tail.rotateZ(Math.PI / 2); tail.translate(-18.7, .7, 0);
-  const tailCap = new THREE.SphereGeometry(.45, 10, 8); tailCap.translate(-22.4, .9, 0);
-  const visor = new THREE.BoxGeometry(1.4, .6, 2.6); visor.translate(18.2, .95, 0);
+  // tail cone: joins the fuselage flush, then sweeps up toward the tip (the belly rises, the crown stays level)
+  const tail = new THREE.CylinderGeometry(.45, 2.1, 7.5, 24, 4, true); tail.rotateZ(Math.PI / 2); tail.translate(-18.75, 0, 0);
+  { const a = tail.attributes.position; for (let i = 0; i < a.count; i++) { const t = clamp((-15 - a.getX(i)) / 7.5, 0, 1); a.setY(i, a.getY(i) + t * 1.5); } tail.computeVertexNormals(); }
+  const tailCap = new THREE.SphereGeometry(.45, 10, 8); tailCap.translate(-22.5, 1.5, 0);
+  // cockpit windshield: a dark band that follows the nose surface instead of a box
+  const visor = new THREE.SphereGeometry(2.13, 24, 6, -1.05, 2.1, .58, .34); visor.rotateZ(-Math.PI / 2); visor.scale(2.2, 1, 1); visor.translate(15, 0, 0);
   const wingShape = side => { const s = new THREE.Shape(); s.moveTo(3, 0); s.lineTo(-6.6, 17 * side); s.lineTo(-8.8, 17 * side); s.lineTo(-4.6, 0); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: .45, bevelEnabled: false }); g.rotateX(Math.PI / 2); return g; };
   const stabShape = side => { const s = new THREE.Shape(); s.moveTo(-15.5, 0); s.lineTo(-19.3, 6.6 * side); s.lineTo(-20.8, 6.6 * side); s.lineTo(-19.6, 0); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: .3, bevelEnabled: false }); g.rotateX(Math.PI / 2); return g; };
   const fin = (() => { const s = new THREE.Shape(); s.moveTo(-14.2, 1.6); s.lineTo(-19.6, 9.2); s.lineTo(-21.8, 9.2); s.lineTo(-21.2, 1.2); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: .4, bevelEnabled: false }); g.translate(0, 0, -.2); return g; })();
