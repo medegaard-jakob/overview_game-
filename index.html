@@ -63,7 +63,8 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 .float { position: absolute; z-index: 2; }
 .card { background: var(--card); border: 1px solid rgba(226,232,240,.9); border-radius: 16px; box-shadow: 0 8px 28px rgba(23,32,51,.08), 0 1px 2px rgba(23,32,51,.05); }
 .kpis { top: 14px; left: 14px; }
-.kgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 205px)); gap: 10px; }
+.kgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 205px)); gap: 10px; }
+.kpi.wx b { font-size: 22px; }
 .kpi { padding: 12px 14px; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 2px 12px; align-items: center; }
 .kpi .ic { grid-row: span 3; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
 .kpi .l { font-size: 12.5px; font-weight: 600; }
@@ -149,7 +150,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 .toast { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); }
 
 @media (max-width: 1280px) {
-  .kgrid { grid-template-columns: repeat(2, minmax(0, 190px)); }
+  .kgrid { grid-template-columns: repeat(3, minmax(0, 190px)); }
   .tracking { width: calc(100% - 512px); grid-template-columns: minmax(0, 1fr); }
   .tracking .osum { display: none; }
 }
@@ -224,6 +225,7 @@ button:focus-visible, select:focus-visible, a:focus-visible, .row:focus-visible 
 
 <script src="data/replay.js"></script>
 <script src="data/map_layout.js"></script>
+<script src="data/weather.js"></script>
 <script>
 (() => {
 'use strict';
@@ -888,6 +890,45 @@ function slot(l, i) {   // returns [x, y, z] for the i-th ULD at a location
 }
 const CAP = l => l.type === 'Chute' ? 18 : l.yard ? 80 : 14;
 
+// ---------- weather on the map ----------
+const WSOCK = [800, 250];          // beside the hall road
+function drawWindsock(w) {
+  const [x, y] = WSOCK, H = 20;
+  const [bx, by] = P(x, y, 0), [tx, ty] = P(x, y, H);
+  ctx.strokeStyle = '#64748b'; ctx.lineWidth = Math.max(1, cam.s * .6); ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+  // the sock points downwind and fills out with wind speed (limp below 3 kt, straight out from 15 kt)
+  const to = ((w.dir ?? 0) + 180) * Math.PI / 180, kt = w.kt ?? 0, f = Math.min(1, kt / 15);
+  const ux = Math.sin(to), uy = -Math.cos(to), L = 12, droop = (1 - f) * 9;
+  const seg = 5;
+  for (let i = 0; i < seg; i++) {
+    const a = i / seg, b = (i + 1) / seg, r0 = 2.2 * (1 - a * .45), r1 = 2.2 * (1 - b * .45);
+    const p = (k, r, s) => P(x + ux * L * k * (.3 + .7 * f) - uy * r * s, y + uy * L * k * (.3 + .7 * f) + ux * r * s, H - droop * k * k);
+    const q = [p(a, r0, 1), p(b, r1, 1), p(b, r1, -1), p(a, r0, -1)];
+    ctx.fillStyle = i % 2 ? '#ffffff' : '#f97316'; ctx.beginPath(); q.forEach(([px, py], j) => j ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(15,23,42,.25)'; ctx.lineWidth = .6; ctx.stroke();
+  }
+}
+// rain streaks, low-visibility haze, overcast dimming and night, drawn over the scene (labels stay on top)
+function drawWeather(w) {
+  if (!w) return;
+  screen();
+  const night = 1 - w.light, cloud = (w.cloud ?? 0) / 100;
+  if (cloud > .5) { ctx.fillStyle = `rgba(100,116,139,${(.10 * (cloud - .5) * 2).toFixed(3)})`; ctx.fillRect(0, 0, cw, ch); }
+  if (w.vis != null && w.vis < 5000) { ctx.fillStyle = `rgba(241,245,249,${(.55 * (1 - w.vis / 5000)).toFixed(3)})`; ctx.fillRect(0, 0, cw, ch); }
+  if (night > 0) { ctx.fillStyle = `rgba(15,23,62,${(.34 * night).toFixed(3)})`; ctx.fillRect(0, 0, cw, ch); }
+  if (w.rate > 0) {
+    const n = Math.round(260 * w.rate), now = performance.now() / 1000;
+    const to = ((w.dir ?? 200) + 180) * Math.PI / 180, slant = Math.min(.5, (w.kt ?? 0) / 30) * Math.sign(Math.sin(to) || 1);
+    ctx.strokeStyle = 'rgba(71,105,160,.42)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const sx = ((i * 97.13) % 1) * cw, sp = 380 + (i * 31 % 140);
+      const sy = ((i * 0.6180339 % 1) * (ch + 40) + now * sp) % (ch + 40) - 20, x = (sx + now * sp * slant) % cw;
+      ctx.moveTo(x, sy); ctx.lineTo(x - 12 * slant, sy - 12);
+    }
+    ctx.stroke();
+  }
+}
+
 // ---------- frame ----------
 let selected = null, layoutKey = null;
 const TREES = [[420, 760], [450, 820], [930, 600], [960, 660], [1300, 120], [1320, 700], [1180, 840], [640, 830]];
@@ -938,6 +979,8 @@ function frame(T) {
   const items = [];
   const push = (x, y, fn, see = true) => items.push([x * XB + y * YB, fn, x, y, see]);
   TREES.forEach(([x, y]) => push(x, y, () => drawTree(x, y), false));
+  const w = wxAt(T);
+  if (w) push(WSOCK[0], WSOCK[1], () => drawWindsock(w), false);
   piles.forEach((list, id) => {
     const l = byId[id]; if (l.x == null) return;
     const cap = CAP(l);
@@ -996,6 +1039,8 @@ function frame(T) {
   drawBuildings(see);
   front.sort((a, b) => a[0] - b[0]).forEach(([, fn]) => fn());
 
+  drawWeather(w);
+
   // signs and ground labels
   chutes.forEach(l => label(HALL.x1, l.y, 26, l.label, { bg: '#fff', fg: '#1e3a8a', ring: '#c7d7fe', size: 11.5, prio: 4 }));
   hall.filter(l => l.yard).forEach(l => label((l.yard.x0 + l.yard.x1) / 2, l.yard.y0, 2, l.label, { bg: 'rgba(255,255,255,.9)', fg: '#334155', ring: '#d5dde8', size: 11, prio: 4 }));
@@ -1027,6 +1072,11 @@ const ICON = {
   empty: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M11 2 20 6.5v9L11 20 2 15.5v-9z" fill="#dfe5ec" stroke="#0d9488" stroke-width="1.2"/><path d="M11 11v9l-9-4.5v-9z" fill="#c5cfdb"/></svg>',
   plane: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M10 2h2l1 7 7 4v2l-7-2-.6 4 2.6 2v1.5L11 19l-4 1.5V19l2.6-2L9 13l-7 2v-2l7-4z" fill="#2563eb"/></svg>',
   clock: '<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#2563eb"/><path d="M11 6v5l3 2" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/></svg>',
+  sun: '<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="4.5" fill="#f5a623"/><g stroke="#f5a623" stroke-width="2" stroke-linecap="round"><path d="M11 1.5v2.5M11 18v2.5M1.5 11H4M18 11h2.5M4.3 4.3l1.8 1.8M15.9 15.9l1.8 1.8M4.3 17.7l1.8-1.8M15.9 6.1l1.8-1.8"/></g></svg>',
+  moon: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M15.5 14.5A7 7 0 0 1 8.2 3.6 7.5 7.5 0 1 0 18.6 13a7 7 0 0 1-3.1 1.5z" fill="#6366f1"/></svg>',
+  cloud: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M6.5 17.5a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.6 1.2 3.4 3.4 0 0 1-.2 6.8z" fill="#94a3b8"/></svg>',
+  rain: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M6.5 13a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.6 1.2 3.4 3.4 0 0 1-.2 6.8z" fill="#94a3b8"/><path d="M8 15.5 7 19M12 15.5l-1 3.5M16 15.5l-1 3.5" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  fog: '<svg width="22" height="22" viewBox="0 0 22 22"><g stroke="#94a3b8" stroke-width="2" stroke-linecap="round"><path d="M3 7h16M5 11h14M3 15h14M6 19h10"/></g></svg>',
   tug: '<svg width="30" height="30" viewBox="0 0 30 30"><rect x="3" y="12" width="19" height="9" rx="2" fill="#2563eb"/><rect x="14" y="6" width="8" height="8" rx="1.5" fill="#1e293b"/><rect x="15.5" y="7.5" width="5" height="4" rx="1" fill="#bfdbfe"/><circle cx="8" cy="22" r="3" fill="#1f2937"/><circle cx="18" cy="22" r="3" fill="#1f2937"/><path d="M22 18h5" stroke="#64748b" stroke-width="2"/></svg>',
 };
 let lastStats = null, hourAgo = null;
@@ -1049,6 +1099,35 @@ function counts(T) {
   orders.forEach(o => { if (o.d && o.d >= d0 && o.d < d1 && inOrg(o.company)) { r.runsDay++; if (o.d <= T) r.runs++; } });
   return r;
 }
+// ---------- weather: real Heathrow METARs + hourly archive (data/weather.js, built by tools/build_weather.py) ----------
+const WX = window.WEATHER || null;
+const SKY = { FEW: 'Few clouds', SCT: 'Scattered cloud', BKN: 'Broken cloud', OVC: 'Overcast', NCD: 'No cloud', NSC: 'No cloud', CLR: 'Clear', SKC: 'Clear', VV: 'Sky obscured' };
+const WXTXT = [[/TS/, 'Thunderstorm'], [/SN/, 'Snow'], [/\+RA|\+SHRA/, 'Heavy rain'], [/-RA|-SHRA|-DZ|DZ/, 'Light rain'], [/RA/, 'Rain'], [/FG/, 'Fog'], [/BR/, 'Mist'], [/HZ/, 'Haze']];
+function wxAt(T) {
+  if (!WX || !WX.obs.length) return null;
+  let lo = 0, hi = WX.obs.length - 1;
+  if (T < WX.obs[0].t) return null;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (WX.obs[m].t <= T) lo = m; else hi = m - 1; }
+  const o = WX.obs[lo];
+  if (T - o.t > 3 * 3600) return null;                       // no report for a while: say nothing rather than guess
+  const h = WX.hourly.find(r => r.t <= T && T < r.t + 3600);
+  const day = WX.sun.find(([a, b]) => T >= a - 12 * 3600 && T < b + 12 * 3600 && dayStart(a) === dayStart(T));
+  // daylight 0..1 with a 40-minute twilight either side of sunrise and sunset
+  const light = day ? Math.max(0, Math.min(1, (T - day[0] + 1200) / 2400, (day[1] + 1200 - T) / 2400)) : 1;
+  const wet = /RA|DZ|SN|SH|TS/.test(o.wx), rate = /\+/.test(o.wx) ? 1 : /-/.test(o.wx) ? .35 : wet ? .65 : 0;
+  return { ...o, cloud: h ? h.cloud : null, mm: h ? h.mm : null, light, rate, wet,
+    what: (WXTXT.find(([r]) => r.test(o.wx)) || [, SKY[o.sky] || ''])[1] };
+}
+const compass = d => d == null ? 'VRB' : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(d / 45) % 8];
+function wxCard(T) {
+  const w = wxAt(T);
+  if (!w) return `<div class="card kpi wx"><span class="ic" style="background:#f1f5f9">${ICON.cloud}</span><span class="l">Weather · LHR</span><b>–</b><span class="s">no report</span></div>`;
+  const ic = w.wet ? ICON.rain : w.vis != null && w.vis < 5000 ? ICON.fog : w.light < .5 ? ICON.moon : (w.cloud ?? 0) > 70 ? ICON.cloud : ICON.sun;
+  const wind = w.kt == null ? '' : w.kt < 3 ? 'calm' : `${compass(w.dir)} ${Math.round(w.kt)} kt${w.gust ? ' G' + Math.round(w.gust) : ''}`;
+  const vis = w.vis == null || w.vis >= 9999 ? '' : `vis ${(w.vis / 1000).toFixed(w.vis < 1000 ? 1 : 0)} km`;   // only worth saying below 10 km
+  return `<div class="card kpi wx" title="${esc(w.raw)}"><span class="ic" style="background:${w.wet ? '#e0ecff' : '#fff6e5'}">${ic}</span><span class="l">Weather · LHR</span><b>${Math.round(w.temp)}°C</b><span class="s">${[w.what, wind, vis].filter(Boolean).map(esc).join(' · ')}</span></div>`;
+}
+
 function renderPanels(T, res) {
   $('clock').textContent = fmtT(T);
   $('liveTxt').textContent = fmtD(T);
@@ -1062,7 +1141,7 @@ function renderPanels(T, res) {
     [ICON.empty, '#e6f6f4', 'Empty ULDs delivered', `${c.empty}${delta(c.empty, prev.empty)}`, `of ${c.emptyDay} today`],
     [ICON.plane, '#eaf1fe', 'Flights processed', `${c.flights.size}${delta(c.flights.size, prev.flights.size)}`, `of ${c.flDay.size} today · ${c.runs} trips`],
     [ICON.clock, '#eaf1fe', 'On-time delivery', `${onTime.toFixed(1)}%`, `${c.late} late · ${c.urgent} urgent · ${c.escalated} escalated`],
-  ].map(([ic, bg, l, v, s]) => `<div class="card kpi"><span class="ic" style="background:${bg}">${ic}</span><span class="l">${l}</span><b>${v}</b><span class="s">${s}</span></div>`).join('');
+  ].map(([ic, bg, l, v, s]) => `<div class="card kpi"><span class="ic" style="background:${bg}">${ic}</span><span class="l">${l}</span><b>${v}</b><span class="s">${s}</span></div>`).join('') + wxCard(T);
 
   const inTransit = res.states.reduce((n, s) => n + (s.st.k === 'carry' || s.st.k === 'atdrop' ? s.st.o.tasks.filter(t => !(t.can && t.can <= T)).length : 0), 0);
   const on = res.states.filter(s => s.st.k !== 'off').length;
@@ -1202,6 +1281,16 @@ function drawTL(T) {
   const g = tctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, tlW, tlH);
   const top = 20, base = tlH - 12, bw = tlW / nBins, dx = Math.min(3, bw * .35), dy = dx * .6;
   const quad = (pts, c) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fillStyle = c; g.fill(); };
+  // night hours shaded, rain marked with small drops along the top
+  if (WX) {
+    const X = t => (t - tMin) / 3600 * bw;
+    g.fillStyle = 'rgba(30,41,59,.06)';
+    WX.sun.forEach(([a, b], i) => { const next = WX.sun[i + 1]; if (next) g.fillRect(X(b), 0, X(next[0]) - X(b), base); });
+    const firstDawn = WX.sun.find(([a]) => a > tMin);
+    if (firstDawn && !WX.sun.some(([, b]) => b > tMin && b < firstDawn[0])) g.fillRect(0, 0, X(firstDawn[0]), base);
+    g.fillStyle = '#3b82f6';
+    WX.obs.forEach(o => { if (o.t >= tMin && o.t <= tMax && /RA|DZ|SN|SH|TS/.test(o.wx)) { g.beginPath(); g.arc(X(o.t), top - 2, 2.2, 0, Math.PI * 2); g.fill(); } });
+  }
   // floor strip under the columns
   quad([[0, base], [tlW, base], [tlW + dx, base - dy], [dx, base - dy]], '#eef2f7');
   // little 3D columns: front, side and top faces like the boxes on the map
