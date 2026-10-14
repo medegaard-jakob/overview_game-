@@ -1383,7 +1383,7 @@ function select(kind, id, glide) {
 function posOf(s) {
   if (!s) return null;
   if (s.kind === 'tug') { const d = drvById[s.id]; return d?._p ? { x: d._p.x, y: d._p.y, z: 4, r: 6 } : null; }
-  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[f.stand]; if (l?.nose) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
+  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[f.stand]; if (l?.nose && lastRes?.planeAt.get(l.id)?.id === f.id) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
   const l = byId[s.id]; if (!l) return null;
   if (s.kind === 'stand' && l.nose) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 26 }; }
   if (l.yard) return { x: (l.yard.x0 + l.yard.x1) / 2, y: (l.yard.y0 + l.yard.y1) / 2, z: 6, r: 40 };
@@ -1639,6 +1639,8 @@ function renderPanels(T, res, force) {
   $('alN').hidden = !al.length; $('alN').textContent = al.length;
   $('dnBtn').innerHTML = { auto: `${WXI.auto}<span>Auto</span>`, day: `${WXI.sun}<span>Day</span>`, night: `${WXI.moon}<span>Night</span>` }[dnMode];
   if (!$('wxPop').hidden) renderWx(T); if (!$('alPop').hidden) renderAlerts(T, al);
+  // a selected flight lets go when the replay moves well away from it (another day, or long gone)
+  if (sel?.kind === 'flight') { const f = flights[sel.id], out = f && (f.etd || f.std), inn = f && (f.sta || out - 150 * 60); if (!f || T < inn - 3 * 3600 || T > out + 3600) { sel = null; follow = null; } }
   // default selection: the first tug doing something
   if (!sel || (sel.kind === 'tug' && !inOrg(drvById[sel.id]?.company))) {
     const s = res.states.find(s => !['off', 'idle'].includes(s.st.k)) || res.states.find(s => s.st.k !== 'off');
@@ -1685,7 +1687,7 @@ function renderDetail(T, res) {
   } else if (sel.kind === 'flight') {
     const f = flights[sel.id], l = byId[f.stand], I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
     const ph = { 'On stand': ['var(--ok-soft)', 'var(--ok)'], 'Pushback': ['var(--info-soft)', 'var(--info)'] }[I.phase] || ['var(--chip)', 'var(--muted)'];
-    el.innerHTML = head(`<span style="color:${TAILC[String(f.no).slice(0, 2)] || 'var(--accent)'}">${ICON.plane}</span>`, airlineOf(f.no), esc(f.no), `Stand ${esc(l?.name ?? '—')} · ${esc(f.status || 'Scheduled')}`) + `
+    el.innerHTML = head(`<span style="color:${TAILC[String(f.no).slice(0, 2)] || 'var(--accent)'}">${ICON.plane}</span>`, airlineOf(f.no), esc(f.no), `${fmtD(f.etd || f.std)} · stand ${esc(l?.name ?? '—')} · ${esc(f.status || 'Scheduled')}`) + `
       <div class="state">${pill(I.phase, ph[0], ph[1])}${I.urgent ? pill(`${I.urgent} urgent`, 'var(--alert)', '#fff') : ''}<span>${left >= 0 ? `Departs in ${left} min` : `Departed ${-left} min ago`}</span></div>
       <div class="kv"><span>On stand</span><strong class="m">${f.sta ? fmtT(f.sta) : `~${fmtT(I.inn)}`}</strong>
         <span>Departure</span><strong class="m">${fmtT(I.out)}${f.etd && f.std && f.etd !== f.std ? ` (STD ${fmtT(f.std)})` : ''}</strong>
@@ -1739,7 +1741,7 @@ function renderTracker(T, res) {
   if (f) {
     const I = flightInfo(f, T), dels = I.ts.filter(t => t.del).map(t => t.del).sort((a, b) => a - b);
     $('trkTitle').textContent = `Turnaround · ${f.no}`;
-    $('trkHead').textContent = `stand ${byId[f.stand]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
+    $('trkHead').textContent = `${fmtD(I.out)} · stand ${byId[f.stand]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
     $('steps').innerHTML = steps([['On stand', I.inn, STEPI.stand], ['First ULD', dels[0], STEPI.box], ['Last ULD', dels[dels.length - 1], STEPI.ok], ['Pushback', I.out, STEPI.go]], T, false);
     const pending = I.ts.filter(t => !(t.del && t.del <= T) && !(t.can && t.can <= T)).length;
     $('tsum').innerHTML = `<span><b>${I.del.length}</b> of ${I.ts.length} ULDs delivered</span><span><b>${pending}</b> still to come</span><span style="color:${I.late.length ? 'var(--alert)' : 'inherit'}"><b>${I.late.length}</b> late</span><span>${I.phase}</span>`;
