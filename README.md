@@ -21,6 +21,14 @@ a windsock by the hall shows the wind, and the timeline marks night hours and ra
 `data/weather.js`, built by `python3 tools/build_weather.py` from the EGLL METAR reports (Iowa Environmental Mesonet)
 and the Open-Meteo historical archive (hourly cloud cover, sunrise and sunset).
 
+### Flow CTRL (prototype)
+
+`flow.html` is the same replay as a 3D strategy-game style control room built with Three.js: clay buildings, A320-style
+aircraft, tugs with dolly trains, frosted glass panels, search, area switcher, alerts and a phone layout with a bottom sheet.
+Tugs, ULDs, stands, flights, urgency and weather come from the data with the same rules as the main view (the validator
+checks it with `--page flow.html`). Landing, taxiing, pushback and take-off are drawn to show the flow around the real stand
+times; the runway direction follows the real wind. The "Flow CTRL at Hearhow Airport" sign is on Terminal 2A's roof.
+
 ### Legacy views (kept for reference, not developed further)
 
 - `legacy/control-room.html`: the 3D control room on a schematic apron (the earlier main view).

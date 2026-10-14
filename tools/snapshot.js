@@ -13,6 +13,8 @@ const { chromium } = require('playwright');
   const p = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
   const errors = [];
   p.on('pageerror', e => errors.push(e.message));
+  // offline sandboxes: serve CDN libraries (three.js for flow.html) from a local copy
+  if (process.env.THREE_JS) await p.route('https://cdnjs.cloudflare.com/**', r => r.fulfill({ path: process.env.THREE_JS, contentType: 'application/javascript' }));
   await p.goto('file://' + path.resolve(page));
   await p.waitForFunction(() => window.apronDebug, null, { timeout: 15000 });
   const range = await p.evaluate(() => window.apronDebug.range());

@@ -1,0 +1,1940 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flow CTRL</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a full-bleed clay 3D apron with frosted glass panels floating over it; one sunset-orange accent on warm off-white */
+:root {
+  --bg: #f3ede5;           /* warm off-white ground of the page */
+  --ink: #221c17;
+  --muted: #7d7167;
+  --line: rgba(74, 52, 30, .13);
+  --glass: rgba(255, 251, 246, .74);
+  --glass-strong: rgba(255, 252, 248, .9);
+  --chip: rgba(74, 52, 30, .07);
+  --accent: #ff6a1a;       /* sunset orange: selection, full ULDs, the sign */
+  --accent-ink: #c94a06;
+  --accent-soft: rgba(255, 106, 26, .14);
+  --ok: #2f8f5b; --ok-soft: rgba(47, 143, 91, .13);
+  --warn: #b7791f;
+  --alert: #d33a2c; --alert-soft: rgba(211, 58, 44, .12);
+  --info: #3767c9; --info-soft: rgba(55, 103, 201, .12);
+  --violet: #6d55d8; --violet-soft: rgba(109, 85, 216, .13);
+  --teal: #1f8f84; --teal-soft: rgba(31, 143, 132, .13);
+  --shadow: 0 10px 30px rgba(60, 40, 20, .12), 0 1px 2px rgba(60, 40, 20, .08);
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15110e; --ink: #f4ece3; --muted: #a99c90; --line: rgba(255, 236, 214, .12);
+    --glass: rgba(30, 24, 20, .72); --glass-strong: rgba(34, 27, 22, .92); --chip: rgba(255, 236, 214, .08);
+    --accent-ink: #ff8a48; --accent-soft: rgba(255, 106, 26, .2);
+    --ok: #5cc28a; --ok-soft: rgba(92, 194, 138, .16); --alert: #ff6b5b; --alert-soft: rgba(255, 107, 91, .16);
+    --info: #7ea2ff; --info-soft: rgba(126, 162, 255, .16); --violet: #a693ff; --violet-soft: rgba(166, 147, 255, .16);
+    --teal: #4cc3b6; --teal-soft: rgba(76, 195, 182, .16); --warn: #e0a84a;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .35), 0 1px 2px rgba(0, 0, 0, .3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15110e; --ink: #f4ece3; --muted: #a99c90; --line: rgba(255, 236, 214, .12);
+  --glass: rgba(30, 24, 20, .72); --glass-strong: rgba(34, 27, 22, .92); --chip: rgba(255, 236, 214, .08);
+  --accent-ink: #ff8a48; --accent-soft: rgba(255, 106, 26, .2);
+  --ok: #5cc28a; --ok-soft: rgba(92, 194, 138, .16); --alert: #ff6b5b; --alert-soft: rgba(255, 107, 91, .16);
+  --info: #7ea2ff; --info-soft: rgba(126, 162, 255, .16); --violet: #a693ff; --violet-soft: rgba(166, 147, 255, .16);
+  --teal: #4cc3b6; --teal-soft: rgba(76, 195, 182, .16); --warn: #e0a84a;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .35), 0 1px 2px rgba(0, 0, 0, .3);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 500 14px/1.4 var(--body); overflow: hidden; -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.app { position: relative; height: 100%; overflow: hidden; }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#gl.drag { cursor: grabbing; }
+#gl.hover { cursor: pointer; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.lb { position: absolute; left: 0; top: 0; white-space: nowrap; font: 700 11.5px/1 var(--body); padding: 5px 8px; border-radius: 8px;
+  background: rgba(34, 28, 23, .82); color: #fff; transform-origin: 50% 100%; will-change: transform; display: flex; gap: 6px; align-items: center; }
+.lb em { font-style: normal; font-family: var(--mono); font-weight: 600; font-size: 11px; color: #ffd2b8; }
+.lb.soft { background: rgba(255, 252, 248, .9); color: #3a2e25; box-shadow: 0 1px 3px rgba(60, 40, 20, .18); }
+.lb.soft em { color: var(--accent-ink); }
+.lb.bare { background: none; color: #8c5a2e; padding: 0; font-size: 11px; text-shadow: 0 1px 0 rgba(255,255,255,.7); }
+.lb.urgent { background: var(--alert); }
+.lb.sel { background: var(--accent); color: #fff; font-size: 12.5px; padding: 7px 10px; box-shadow: 0 6px 18px rgba(255, 106, 26, .35); }
+.lb.sel em { color: #fff; opacity: .9; }
+.lb.sign { background: #fff; color: #1e3a8a; box-shadow: 0 1px 3px rgba(30, 58, 138, .2); }
+.lb .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* glass */
+.glass { background: var(--glass); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); }
+.float { position: absolute; z-index: 3; }
+
+/* top bar */
+.top { position: absolute; z-index: 5; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  height: 54px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 12px; }
+.logo { display: flex; align-items: center; gap: 10px; min-width: 0; flex: none; }
+.logo b { font: 800 17px/1 var(--display); letter-spacing: -.01em; }
+.logo b i { font-style: normal; color: var(--accent); }
+.logo small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 3px; letter-spacing: .02em; }
+.sep { width: 1px; height: 28px; background: var(--line); flex: none; }
+.search { position: relative; flex: 1 1 200px; min-width: 120px; max-width: 280px; }
+.search input { width: 100%; height: 36px; border-radius: 11px; border: 1px solid var(--line); background: var(--chip); padding: 0 10px 0 32px; outline: none; }
+.search input::placeholder { color: var(--muted); }
+.search svg { position: absolute; left: 10px; top: 10px; color: var(--muted); }
+.results { position: absolute; top: 42px; left: 0; width: 320px; max-height: 360px; overflow: auto; padding: 6px; z-index: 6; }
+.res { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; text-align: left; border: 0; background: none; border-radius: 10px; padding: 7px 8px; }
+.res:hover, .res.on { background: var(--chip); }
+.res .k { font: 600 10px/1 var(--mono); color: var(--muted); text-transform: uppercase; }
+.res b { font-weight: 700; display: block; }
+.res small { color: var(--muted); font-size: 12px; }
+.seg { display: flex; background: var(--chip); border-radius: 11px; padding: 3px; gap: 2px; flex: none; }
+.seg button { border: 0; background: none; border-radius: 8px; padding: 6px 10px; font-weight: 600; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--glass-strong); color: var(--ink); box-shadow: 0 1px 3px rgba(60, 40, 20, .14); }
+.spacer { flex: 1 1 0; min-width: 0; }
+.tbtn { height: 36px; min-width: 36px; border-radius: 11px; border: 1px solid var(--line); background: var(--glass-strong); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 10px; font-weight: 700; flex: none; position: relative; }
+.tbtn:hover { border-color: rgba(255, 106, 26, .45); }
+.tbtn .badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--alert); color: #fff; font: 700 10.5px/18px var(--mono); padding: 0 5px; }
+.clock { font: 600 15px/1 var(--mono); letter-spacing: -.01em; }
+.clock small { display: block; font: 600 10.5px/1 var(--body); color: var(--muted); margin-top: 3px; text-align: right; }
+.pop { position: absolute; top: 62px; z-index: 6; width: 320px; padding: 14px; display: grid; gap: 10px; }
+.pop h3 { margin: 0; font: 800 14px/1.2 var(--display); }
+.pop .raw { font: 500 11.5px/1.5 var(--mono); color: var(--muted); background: var(--chip); border-radius: 10px; padding: 8px 10px; overflow-wrap: anywhere; }
+.pop .note { font-size: 12px; color: var(--muted); }
+
+/* KPIs */
+.kpis { top: calc(76px + env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); }
+.kgrid { display: grid; grid-template-columns: repeat(3, 214px); gap: 10px; }
+.kpi { padding: 12px 14px; display: grid; gap: 4px; }
+.kpi .l { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.kpi .v { font: 800 28px/1 var(--display); letter-spacing: -.02em; display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
+.kpi .v small { font: 700 12px/1 var(--mono); color: var(--ok); }
+.kpi .s { font-size: 12px; color: var(--muted); }
+.split { height: 6px; border-radius: 3px; background: var(--chip); display: flex; overflow: hidden; margin-top: 2px; }
+.split i { display: block; height: 100%; }
+
+/* detail */
+.detail { top: calc(76px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); width: 340px; max-height: calc(100% - 500px); min-height: 0; overflow: auto; padding: 16px; }
+.dbody { display: grid; gap: 12px; }
+.dh { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.av { width: 44px; height: 44px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; }
+.eye { font: 700 10.5px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); }
+.dn { font: 800 22px/1.1 var(--display); letter-spacing: -.01em; margin-top: 3px; }
+.ds { font-size: 12.5px; color: var(--muted); }
+.ib { width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--line); background: var(--glass-strong); display: grid; place-items: center; }
+.ib[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ibs { display: flex; gap: 6px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 8px; white-space: nowrap; }
+.state { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); border-top: 1px solid var(--line); }
+.kv span, .kv strong { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.kv span { color: var(--muted); }
+.kv strong { text-align: right; font-weight: 700; overflow-wrap: anywhere; }
+.kv strong.m { font-family: var(--mono); font-weight: 600; }
+.bar { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); }
+
+/* tracker */
+.tracker { left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(86px + env(safe-area-inset-bottom, 0px)); width: min(600px, calc(100% - 520px)); padding: 14px 16px; display: grid; gap: 12px; }
+.th { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.th h2 { margin: 0; font: 800 15px/1.2 var(--display); }
+.th span { font-size: 12px; color: var(--muted); }
+.steps { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); position: relative; }
+.steps::before { content: ""; position: absolute; left: calc(50% / var(--n, 4)); right: calc(50% / var(--n, 4)); top: 15px; height: 3px; border-radius: 3px; background: var(--line); }
+.steps .fill { position: absolute; left: calc(50% / var(--n, 4)); top: 15px; height: 3px; border-radius: 3px; background: var(--accent); }
+.step { display: grid; justify-items: center; gap: 4px; text-align: center; position: relative; min-width: 0; }
+.step i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--glass-strong); border: 2px solid var(--line); color: var(--muted); font-style: normal; }
+.step.done i { background: var(--accent); border-color: var(--accent); color: #fff; }
+.step.now i { border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 5px var(--accent-soft); }
+.step.bad i { background: var(--alert); border-color: var(--alert); color: #fff; }
+.step b { font-size: 12px; font-weight: 700; }
+.step small { font: 600 11px/1 var(--mono); color: var(--muted); }
+.tsum { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.tsum b { color: var(--ink); }
+
+/* live table */
+.table { right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(86px + env(safe-area-inset-bottom, 0px)); width: 440px; padding: 10px 12px; display: grid; gap: 6px; }
+.tabs { display: flex; gap: 4px; align-items: center; padding-right: 18px; }
+.tabs button { border: 0; background: none; border-radius: 9px; padding: 6px 10px; font-weight: 600; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--chip); color: var(--ink); font-weight: 800; }
+.tabs em { font-style: normal; font-family: var(--mono); font-size: 11.5px; color: var(--accent-ink); margin-left: 4px; }
+.rows { max-height: 226px; overflow: auto; display: grid; }
+.row { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto 50px; gap: 10px; align-items: center; padding: 8px 4px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; width: 100%; }
+.row:hover, .row.sel { background: var(--chip); border-radius: 8px; }
+.row .id { font-weight: 800; font-size: 13px; line-height: 1.15; }
+.row .id small { display: block; font-weight: 500; color: var(--muted); font-size: 11px; }
+.row .w { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .n { font: 600 11.5px/1 var(--mono); color: var(--muted); text-align: right; }
+.row.off { opacity: .55; }
+.empty { padding: 12px 4px; color: var(--muted); font-size: 13px; }
+
+/* timeline */
+.timeline { left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); height: 64px; padding: 6px 10px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; }
+.tctl { display: flex; gap: 6px; align-items: center; }
+.play { width: 40px; height: 40px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; display: grid; place-items: center; }
+.sel { height: 36px; border-radius: 11px; border: 1px solid var(--line); background: var(--glass-strong); padding: 0 8px; font-weight: 600; white-space: nowrap; }
+#tl { width: 100%; height: 50px; display: block; cursor: ew-resize; touch-action: none; }
+
+/* minimise */
+.min { position: absolute; top: -9px; right: -9px; z-index: 4; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass-strong); color: var(--muted); display: grid; place-items: center; padding: 0; box-shadow: 0 2px 8px rgba(60, 40, 20, .14); }
+.min:hover { color: var(--accent-ink); }
+.min span { display: none; }
+.float.collapsed { width: auto !important; height: auto !important; padding: 0 !important; background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; display: block; }
+.float.collapsed > :not(.min) { display: none !important; }
+.float.collapsed .min { position: static; width: auto; height: 36px; padding: 0 12px 0 10px; border-radius: 12px; display: flex; gap: 8px; align-items: center; font-weight: 700; font-size: 13px; color: var(--ink); background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: var(--shadow); }
+.float.collapsed .min span { display: inline; }
+
+/* bottom sheet (phones) */
+.sheet { display: none; }
+@media (max-width: 1180px) {
+  .areas button { padding: 6px 8px; }
+  .logo small { display: none; }
+  .tracker { width: calc(100% - 490px); }
+  .steps .step b { font-size: 11px; }
+}
+.mselects { display: flex; gap: 6px; flex: none; }
+#areaSel, #orgSel { display: none; }
+@media (max-width: 1400px) { .orgseg { display: none; } #orgSel { display: block; } }
+@media (max-width: 1040px) { .areas { display: none; } #areaSel { display: block; } }
+@media (max-width: 760px) {
+  .top { height: auto; flex-wrap: wrap; padding: 8px 10px; gap: 6px 6px; }
+  .logo { order: 0; } .logo svg { width: 28px; height: 28px; } .logo b { font-size: 15px; }
+  .spacer { order: 1; } .clock { order: 2; font-size: 13px; } #wxBtn { order: 3; } #alBtn { order: 4; } #dnBtn { order: 5; }
+  .tbtn { height: 32px; min-width: 32px; padding: 0 7px; }
+  #dnBtn span { display: none; }
+  .mselects { order: 6; } .mselects .sel { height: 34px; max-width: 108px; font-size: 13px; }
+  .search { order: 7; flex: 1 1 100px; min-width: 0; max-width: none; }
+  .search input { height: 34px; }
+  .results { width: calc(100vw - 24px); left: auto; right: -2px; }
+  .clock small { display: none; }
+  .sep { display: none; }
+  .kpis { top: calc(104px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); }
+  .kgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .kpi { padding: 8px 10px; }
+  .kpi .l { font-size: 10px; }
+  .kpi .v { font-size: 20px; }
+  .kpi .s, .kpi .split { display: none; }
+  .float.detail, .float.tracker, .float.table { display: none; }
+  .timeline { bottom: auto; top: auto; position: relative; left: auto; right: auto; height: 56px; padding: 4px 8px; border-radius: 12px; }
+  .sheet { display: grid; position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; padding: 8px max(10px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); gap: 8px;
+    border-radius: 20px 20px 0 0; background: var(--glass); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-top: 1px solid var(--line); box-shadow: 0 -10px 30px rgba(60, 40, 20, .14); }
+  .grab { justify-self: center; width: 44px; height: 5px; border-radius: 3px; background: var(--line); border: 0; padding: 0; }
+  .stabs { display: flex; gap: 4px; }
+  .stabs button { flex: 1; border: 0; background: var(--chip); border-radius: 10px; padding: 8px; font-weight: 700; font-size: 13px; color: var(--muted); }
+  .stabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
+  .sbody { max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+  .sheet.open .sbody { max-height: 46vh; overflow: auto; }
+  .sbody > section { display: none; }
+  .sbody > section.on { display: grid; gap: 10px; }
+  .sbody .rows { max-height: none; }
+}
+@media (prefers-reduced-motion: reduce) { .sbody { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <canvas id="gl" aria-label="3D view of the Heathrow Terminal 2 apron with the T1 baggage hall, live tugs, ULDs and aircraft"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <header class="top glass">
+    <div class="logo">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="10" fill="#ff6a1a"/><path d="M9 21.5c3.2-.2 5.3-1.6 7-4.2 1.6-2.4 3.6-4.6 8.5-4.8" stroke="#fff" stroke-width="2.6" stroke-linecap="round" fill="none"/><circle cx="24.5" cy="12.5" r="2.2" fill="#fff"/><path d="M9 25h16" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></svg>
+      <div><b>Flow <i>CTRL</i></b><small>Hearhow Airport · T1 baggage → T2 apron</small></div>
+    </div>
+    <span class="sep"></span>
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5" stroke-linecap="round"/></svg>
+      <input id="q" type="search" placeholder="Search tug, flight, stand, bank" autocomplete="off" aria-label="Search">
+      <div class="results glass" id="results" hidden></div>
+    </div>
+    <div class="seg areas" id="areas" role="group" aria-label="Area"></div>
+    <div class="mselects">
+      <select class="sel" id="areaSel" aria-label="Area"></select>
+      <select class="sel" id="orgSel" aria-label="Organisation"></select>
+    </div>
+    <span class="spacer"></span>
+    <div class="seg orgseg" id="org" role="group" aria-label="Organisation"></div>
+    <button class="tbtn" type="button" id="wxBtn" aria-haspopup="true" aria-expanded="false" title="Weather at Heathrow"></button>
+    <button class="tbtn" type="button" id="alBtn" aria-haspopup="true" aria-expanded="false" title="Alerts"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 13V8a5 5 0 0 1 10 0v5l1.5 1.5h-13zM7.5 16.2a1.8 1.8 0 0 0 3 0" stroke-linejoin="round"/></svg><span class="badge" id="alN" hidden></span></button>
+    <button class="tbtn" type="button" id="dnBtn" title="Day and night: follows the real sun"></button>
+    <div class="clock" id="clock">--:--<small>—</small></div>
+  </header>
+  <div class="pop glass" id="wxPop" hidden></div>
+  <div class="pop glass" id="alPop" hidden></div>
+
+  <section class="float kpis" data-panel="kpis" data-title="Today"><div class="kgrid" id="kpis"></div></section>
+  <aside class="float glass detail" id="pDetail" data-panel="detail" data-title="Details"><div class="dbody" id="detail" aria-live="polite"></div></aside>
+  <section class="float glass tracker" id="pTrack" data-panel="tracker" data-title="Turnaround" aria-label="Turnaround tracker">
+    <div class="th"><h2 id="trkTitle">Turnaround</h2><span id="trkHead"></span></div>
+    <div class="steps" id="steps"></div>
+    <div class="tsum" id="tsum"></div>
+  </section>
+  <section class="float glass table" id="pTable" data-panel="table" data-title="Live table" aria-label="Live table">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="rows" id="rows" role="tabpanel"></div>
+  </section>
+  <div class="float glass timeline" id="pTime" data-panel="time" data-title="Timeline">
+    <div class="tctl">
+      <button class="play" type="button" id="play" title="Play or pause (space)"></button>
+      <select class="sel" id="speed" aria-label="Replay speed"><option value="10">10×</option><option value="30">30×</option><option value="60" selected>60×</option><option value="180">180×</option><option value="600">600×</option></select>
+      <select class="sel" id="day" aria-label="Day"></select>
+      <button class="sel" type="button" id="skip" title="Jump to the next accepted order">Next order ›</button>
+    </div>
+    <canvas id="tl" aria-label="ULDs delivered per hour; drag to move through time"></canvas>
+  </div>
+
+  <div class="sheet" id="sheet">
+    <button class="grab" type="button" id="grab" aria-label="Open or close the panel"></button>
+    <div id="sheetTime"></div>
+    <div class="stabs" role="tablist" id="stabs">
+      <button type="button" data-s="detail" aria-selected="true">Details</button>
+      <button type="button" data-s="track" aria-selected="false">Turnaround</button>
+      <button type="button" data-s="list" aria-selected="false">Live</button>
+    </div>
+    <div class="sbody" id="sbody">
+      <section data-s="detail" class="on" id="sDetail"></section>
+      <section data-s="track" id="sTrack"></section>
+      <section data-s="list" id="sList"></section>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="data/replay.js"></script>
+<script src="data/map_layout.js"></script>
+<script src="data/weather.js"></script>
+<script>
+(() => {
+'use strict';
+const D = window.REPLAY_DATA;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// status colours (semantic) for the tugs; full ULDs share the accent
+const C = {
+  paint: '#ff6a1a', full: '#ff6a1a', empty: '#1f8f84', pickup: '#3767c9', assigned: '#6d55d8',
+  idle: '#9a8f86', alert: '#d33a2c', ink: '#221c17', muted: '#7d7167', brand: '#ff6a1a', ok: '#2f8f5b',
+};
+
+// ===== shared replay logic: same in every view, legacy ones included (tools/validate.py checks each) =====
+// ---------- world layout: real T1/T2 geometry from the Heathrow ground movement chart (metres) ----------
+// Positions come from data/map_layout.js (built by tools/build_map_layout.py from the published chart).
+const ML = window.MAP_LAYOUT;
+const SPEED = 4.5;              // metres per simulated second (~16 km/h tug)
+const byId = Object.fromEntries(D.locations.map(l => [l.id, l]));
+const flights = Object.fromEntries(D.flights.map(f => [f.id, f]));
+const users = Object.fromEntries(D.drivers.map(u => [u.id, u]));
+
+function shortName(l) {
+  if (l.type === 'EmptyStorage') return 'EMPTY CANS';
+  if (l.type === 'EarlyStorage') return 'EARLY CANS';
+  let m = l.name.match(/^(\w+) Bank ?(\d*)$/);
+  if (m) return (m[1] === 'United' ? 'UA' : m[1] === 'Menzies' ? 'MZ' : m[1]) + (m[2] ? ' B' + m[2] : ' BANK');
+  return l.name;
+}
+const hall = D.locations.filter(l => l.type !== 'FlightStand');
+const chutes = hall.filter(l => l.type === 'Chute').sort((a, b) => a.name.localeCompare(b.name));
+const HALL = ML.hall;
+// bank doors along the east face of the T1 baggage hall; can stores are yards across the road
+chutes.forEach((l, i) => { l.hall = true; l.x = HALL.x1; l.y = HALL.y0 + 34 + i * 40; });
+hall.filter(l => l.type !== 'Chute').forEach((l, i) => {
+  l.hall = true; l.yard = { x0: 800, x1: 872, y0: 300 + i * 84, y1: 366 + i * 84 };
+  l.x = 800; l.y = l.yard.y0 + 33;
+});
+const allStands = D.locations.filter(l => l.type === 'FlightStand')
+  .sort((a, b) => parseInt(a.name) - parseInt(b.name) || a.name.localeCompare(b.name));
+allStands.forEach(l => {
+  const s = ML.stands[l.name];
+  if (!s) { l.x = null; return; }
+  l.nose = [s.x, s.y]; l.h = [s.hx, s.hy];
+  l.x = s.x - s.hx * 8; l.y = s.y - s.hy * 8;          // tugs serve the aircraft just behind the nose
+});
+let stands = allStands;           // the stands that matter for the day and organisation shown
+function layoutStands(list) { stands = list; }
+D.locations.forEach(l => l.label = shortName(l));
+
+// ---------- road network: axis-aligned road segments, shortest paths between access points ----------
+const ROADS = ML.roads.map(([a, b]) => ({ a, b, v: a[0] === b[0] }));
+function project(x, y) {
+  let best = null;
+  ROADS.forEach((r, i) => {
+    const qx = r.v ? r.a[0] : Math.max(Math.min(r.a[0], r.b[0]), Math.min(Math.max(r.a[0], r.b[0]), x));
+    const qy = r.v ? Math.max(Math.min(r.a[1], r.b[1]), Math.min(Math.max(r.a[1], r.b[1]), y)) : r.a[1];
+    const d = Math.hypot(qx - x, qy - y);
+    if (!best || d < best.d) best = { d, x: qx, y: qy, i };
+  });
+  return best;
+}
+D.locations.forEach(l => { if (l.x == null) return; const q = project(l.x, l.y); l.ax = q.x; l.ay = q.y; l.seg = q.i; });
+// graph nodes: road ends, crossings and every access point, joined along each road
+const nodes = [], nodeAt = new Map();
+const node = (x, y) => { const k = Math.round(x) + ',' + Math.round(y); if (!nodeAt.has(k)) { nodeAt.set(k, nodes.length); nodes.push({ x, y, e: [] }); } return nodeAt.get(k); };
+ROADS.forEach((r, i) => {
+  const on = [r.a, r.b];
+  ROADS.forEach((o, j) => {
+    if (i === j || o.v === r.v) return;
+    const [h, v] = r.v ? [o, r] : [r, o];
+    const x = v.a[0], y = h.a[1];
+    if (x >= Math.min(h.a[0], h.b[0]) && x <= Math.max(h.a[0], h.b[0]) && y >= Math.min(v.a[1], v.b[1]) && y <= Math.max(v.a[1], v.b[1])) on.push([x, y]);
+  });
+  D.locations.forEach(l => { if (l.seg === i) on.push([l.ax, l.ay]); });
+  const ids = [...new Set(on.map(([x, y]) => node(x, y)))].sort((p, q) => r.v ? nodes[p].y - nodes[q].y : nodes[p].x - nodes[q].x);
+  for (let k = 1; k < ids.length; k++) {
+    const a = nodes[ids[k - 1]], b = nodes[ids[k]], w = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    a.e.push([ids[k], w]); b.e.push([ids[k - 1], w]);
+  }
+});
+function shortest(from, to) {
+  const dist = new Array(nodes.length).fill(Infinity), prev = new Array(nodes.length).fill(-1), done = new Set();
+  dist[from] = 0;
+  while (true) {
+    let u = -1;
+    for (let i = 0; i < nodes.length; i++) if (!done.has(i) && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+    if (u < 0 || u === to) break;
+    done.add(u);
+    nodes[u].e.forEach(([v, w]) => { if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; } });
+  }
+  const out = []; for (let u = to; u >= 0; u = prev[u]) out.unshift([nodes[u].x, nodes[u].y]);
+  return out[0] && out[0][0] === nodes[from].x && out[0][1] === nodes[from].y ? out : [[nodes[from].x, nodes[from].y], [nodes[to].x, nodes[to].y]];
+}
+
+// ---------- paths ----------
+function mkPath(pts) {
+  const clean = pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1]);
+  const cum = [0];
+  for (let i = 1; i < clean.length; i++) cum.push(cum[i - 1] + Math.abs(clean[i][0] - clean[i - 1][0]) + Math.abs(clean[i][1] - clean[i - 1][1]));
+  return { pts: clean.length > 1 ? clean : [clean[0], clean[0]], cum: clean.length > 1 ? cum : [0, 0], len: cum[cum.length - 1] || 0 };
+}
+function pointAt(p, s) {
+  s = Math.max(0, Math.min(p.len, s));
+  let i = 1; while (i < p.cum.length - 1 && p.cum[i] < s) i++;
+  const [x0, y0] = p.pts[i - 1], [x1, y1] = p.pts[i];
+  const seg = p.cum[i] - p.cum[i - 1] || 1, f = (s - p.cum[i - 1]) / seg;
+  const dx = Math.sign(x1 - x0), dy = Math.sign(y1 - y0);
+  const lane = 3;              // keep right
+  return { x: x0 + (x1 - x0) * f - dy * lane, y: y0 + (y1 - y0) * f + dx * lane, dx, dy };
+}
+const routeCache = new Map();
+function route(a, b) {
+  const key = a.id + b.id;
+  if (routeCache.has(key)) return routeCache.get(key);
+  const mid = shortest(node(a.ax, a.ay), node(b.ax, b.ay));
+  // door -> road: go square to the road first so tugs stay on the grid
+  const pts = [[a.x, a.y], ...(a.ax !== a.x && a.ay !== a.y ? [[a.ax, a.y]] : []), [a.ax, a.ay], ...mid, [b.ax, b.ay], ...(b.ax !== b.x && b.ay !== b.y ? [[b.ax, b.y]] : []), [b.x, b.y]];
+  const p = mkPath(pts); routeCache.set(key, p); return p;
+}
+
+// ---------- orders & driver timelines ----------
+const firstT = (t, st) => { const e = t.ev.find(e => e[1] === st); return e ? e[0] : null; };
+const lastT = (t, st) => { let r = null; t.ev.forEach(e => { if (e[1] === st) r = e[0]; }); return r; };
+const orders = new Map();
+D.tasks.forEach(t => {
+  t.ready = t.ev[0][0];
+  t.acc = firstT(t, 'accepted'); t.col = firstT(t, 'collected');
+  t.del = lastT(t, 'delivered'); t.can = lastT(t, 'cancelled');
+  if (t.can && t.del && t.del > t.can) t.can = null;
+  let o = orders.get(t.order);
+  if (!o) orders.set(t.order, o = { id: t.order, no: t.orderNo, tasks: [], driver: null });
+  o.tasks.push(t); t.o = o;
+});
+orders.forEach(o => {
+  const ts = o.tasks, min = a => a.length ? Math.min(...a) : null, max = a => a.length ? Math.max(...a) : null;
+  o.driver = ts.map(t => t.driver).find(Boolean) || null;
+  o.a = min(ts.map(t => t.acc).filter(Boolean));
+  o.c = min(ts.map(t => t.col).filter(Boolean));
+  o.d = max(ts.map(t => t.del).filter(Boolean));
+  o.x = ts.every(t => t.can) ? max(ts.map(t => t.can)) : null;
+  if (!o.a && o.c) o.a = o.c;
+  o.from = byId[ts[0].from]; o.to = byId[ts[0].to];
+  o.full = ts.some(t => t.full);
+  o.nFull = ts.filter(t => t.full).length; o.nEmpty = ts.length - o.nFull;
+  o.flight = flights[ts.find(t => t.flight)?.flight] || null;
+  o.ready = min(ts.map(t => t.ready));
+  o.company = ts.map(t => t.company).find(Boolean) || null;
+});
+
+const drivers = D.drivers.map((u, i) => ({ ...u, idx: i, tag: u.name.replace(/^driver/i, '').toUpperCase(), segs: [], orders: [] }))
+  .sort((a, b) => a.tag.localeCompare(b.tag));
+const drvById = Object.fromEntries(drivers.map(d => [d.id, d]));
+orders.forEach(o => { if (o.driver && o.a && drvById[o.driver]) drvById[o.driver].orders.push(o); });
+
+// ---------- organisation filter ----------
+const ORGS = [...new Set(D.tasks.map(t => t.company).concat(drivers.map(d => d.company)).filter(Boolean))].sort();
+let org = 'all';
+try { const v = localStorage.getItem('apron-org'); if (ORGS.includes(v)) org = v; } catch (e) { /* storage unavailable */ }
+const inOrg = c => org === 'all' || c === org;
+const flightOrgs = new Map();
+D.tasks.forEach(t => { if (t.flight && t.company) (flightOrgs.get(t.flight) || flightOrgs.set(t.flight, new Set()).get(t.flight)).add(t.company); });
+
+function travel(len, start, actual) {
+  const base = len / SPEED;
+  return start - actual > 60 ? Math.max(20, base * 0.35) : base;   // catch up when running late
+}
+// never arrive after the logged time: drivers often accept while already standing at the pickup
+const arriveBy = (dur, start, by) => by && start + dur > by ? Math.max(20, by - start) : dur;
+drivers.forEach(d => {
+  // A driver may accept an order and keep it open while doing another, so the tug drives its runs in
+  // the order the ULDs were collected. Orders accepted but never collected don't move the tug.
+  const runs = d.orders.filter(o => o.c).sort((a, b) => a.c - b.c);
+  let pos = null, t = -Infinity, last = null;
+  runs.forEach((o, i) => {
+    const pick = o.from, drop = o.to, next = runs[i + 1];
+    let now = Math.max(o.a, t);
+    if (pos && pos !== pick) {
+      const p = route(pos, pick), dur = arriveBy(travel(p.len, now, o.a), now, o.c);
+      d.segs.push({ k: 'dh', t0: now, t1: now + dur, ra: pos, rb: pick, o }); now += dur; last = [pos, pick];
+    } else last = null;
+    if (o.c) {
+      const cs = Math.max(o.c, now);
+      if (cs > now) d.segs.push({ k: 'atpick', t0: now, t1: cs, loc: pick, ra: last?.[0], rb: last?.[1], o });
+      const p = route(pick, drop), dur = arriveBy(travel(p.len, cs, o.c), cs, o.d);
+      o.vc = cs;
+      d.segs.push({ k: 'carry', t0: cs, t1: cs + dur, ra: pick, rb: drop, o }); now = cs + dur;
+      // wait at the drop-off until the delivery is confirmed, unless the next run's collection comes first
+      const until = Math.min(o.d || now, next ? next.c : Infinity);
+      o.vd = now;
+      if (until > now) d.segs.push({ k: 'atdrop', t0: now, t1: until, loc: drop, ra: pick, rb: drop, o });
+      now = Math.max(now, until); pos = drop;
+    }
+    d.segs.push({ k: 'idle', t0: now, t1: now, loc: pos, o });
+    t = now;
+  });
+});
+
+// ---------- banks: an empty ULD delivered to a bank is filled there and leaves full ----------
+// The export has no per-ULD identity for empties (generic codes like AKE-UA), so each full ULD that
+// becomes ready at a bank takes the oldest empty delivered to that bank by the same organisation in
+// the previous 4 hours. It turns from empty to full in place. With no empty available, a full ULD
+// just appears. Empties that nobody fills are removed after 4 hours.
+const BANK_WAIT = 4 * 3600;
+const bankItems = [];
+(() => {
+  const byBank = new Map();
+  const bank = id => byBank.get(id) || byBank.set(id, { empties: [], fulls: [] }).get(id);
+  D.tasks.forEach(t => {
+    if (byId[t.to].type === 'Chute' && t.del && t.o.vd != null) bank(t.to).empties.push({ t, at: Math.max(t.o.vd, t.del) });
+    if (byId[t.from].type === 'Chute') bank(t.from).fulls.push(t);
+  });
+  byBank.forEach(({ empties, fulls }, id) => {
+    empties.sort((a, b) => a.at - b.at); fulls.sort((a, b) => a.ready - b.ready);
+    const used = new Set();
+    fulls.forEach(f => {
+      const gone = Math.min(f.o.vc ?? Infinity, f.can ?? Infinity);
+      const e = empties.find(e => !used.has(e) && e.t.company === f.company && e.at <= f.ready && f.ready - e.at <= BANK_WAIT);
+      if (e) used.add(e);
+      bankItems.push({ bank: id, company: f.company, t0: e ? e.at : f.ready, fullAt: f.ready, t1: gone, task: f });
+    });
+    empties.forEach(e => {
+      if (!used.has(e)) bankItems.push({ bank: id, company: e.t.company, t0: e.at, fullAt: Infinity, t1: e.at + BANK_WAIT, task: null });
+    });
+  });
+})();
+
+// ---------- urgency ----------
+const isUrgent = (t, T) => t.urgentAt != null && T >= t.urgentAt;          // urgent at this moment (escalations included)
+const escalated = t => t.urgentAt != null && t.urgentAt > t.ready + 5;      // became urgent after it was created
+const isLate = t => !!(t.del && t.due && t.del > t.due);                   // delivered after its latest finish time
+const overdue = (t, T) => !!(t.due && T > t.due && !(t.del && t.del <= T));
+
+const OFF_AFTER = 75 * 60, ON_BEFORE = 20 * 60;
+function driverState(d, T) {
+  const s = d.segs;
+  let i = -1;
+  for (let j = 0; j < s.length; j++) { if (s[j].t0 <= T) i = j; else break; }
+  const next = s.find(x => x.t0 > T && x.k !== 'idle');
+  const seg = i >= 0 ? s[i] : null;
+  if (seg && seg.k !== 'idle' && T <= seg.t1) return seg;
+  // not driving, but holding an accepted order that isn't collected yet (or was cancelled before collection)
+  const open = d.orders.find(o => o.a <= T && T < (o.c || o.x || o.d || Infinity));
+  if (open) return { k: 'assigned', loc: seg ? (seg.loc || seg.o.to) : open.from, o: open };
+  if (!seg) return next && next.t0 - T < ON_BEFORE ? { k: 'idle', loc: next.o.from, o: null } : { k: 'off' };
+  const idleFor = T - seg.t1;
+  if (idleFor > OFF_AFTER && !(next && next.t0 - T < ON_BEFORE)) return { k: 'off', loc: seg.loc };
+  return { k: 'idle', loc: seg.loc || seg.o.to, o: seg.o };
+}
+function statusOf(st) {
+  switch (st.k) {
+    case 'dh': return { text: 'To pickup', color: C.pickup };
+    case 'atpick': return { text: 'Loading', color: C.pickup };
+    case 'carry': return st.o.full ? { text: 'Full run', color: C.full } : { text: 'Empty run', color: C.empty };
+    case 'atdrop': return { text: 'Unloading', color: st.o.full ? C.full : C.empty };
+    case 'assigned': return { text: 'Assigned', color: C.pickup };
+    case 'idle': return { text: 'Idle', color: C.idle };
+    default: return { text: 'Off shift', color: '#4a525d' };
+  }
+}
+
+// ---------- time range ----------
+let tMin = Infinity, tMax = -Infinity;
+D.tasks.forEach(t => t.ev.forEach(e => { tMin = Math.min(tMin, e[0]); tMax = Math.max(tMax, e[0]); }));
+tMin = Math.floor(tMin / 3600) * 3600; tMax = Math.ceil(tMax / 3600) * 3600;
+const nBins = Math.round((tMax - tMin) / 3600);
+let bins = [], maxBin = 1;
+function computeBins() {
+  bins = Array.from({ length: nBins }, () => [0, 0]);
+  D.tasks.forEach(t => { if (t.del && inOrg(t.company)) bins[Math.min(nBins - 1, Math.floor((t.del - tMin) / 3600))][t.full ? 0 : 1]++; });
+  maxBin = Math.max(1, ...bins.map(b => b[0] + b[1]));
+}
+computeBins();
+let busiest = 0; bins.forEach((b, i) => { if (b[0] + b[1] > bins[busiest][0] + bins[busiest][1]) busiest = i; });
+
+// ---------- log events ----------
+const log = [];
+orders.forEach(o => {
+  const drv = drvById[o.driver]?.tag || '—';
+  const what = [o.nFull && `${o.nFull} full`, o.nEmpty && `${o.nEmpty} empty`].filter(Boolean).join(' + ') + ' ULD';
+  const fl = o.flight ? ` · ${o.flight.no}` : '';
+  const route = `${o.from.label} → ${o.to.label}`;
+  const push = (t, verb, color, who) => t && log.push({ t, org: o.company, html: `<span class="v" style="color:${color}">${who} ${verb}</span> ${what} · ${route}${fl}` });
+  push(o.ready, `#${o.no ?? '?'} created`, C.muted, '');
+  push(o.a, 'accepted', C.pickup, drv);
+  push(o.c, 'collected', o.full ? C.full : C.empty, drv);
+  const lateBy = o.d ? Math.max(0, ...o.tasks.filter(isLate).map(t => t.del - t.due)) : 0;
+  if (lateBy) push(o.d, `delivered late (+${Math.round(lateBy / 60)} min)`, C.alert, drv);
+  else push(o.d, 'delivered', o.full ? C.full : C.empty, drv);
+  const escAt = Math.min(...o.tasks.filter(escalated).map(t => t.urgentAt));
+  if (isFinite(escAt)) push(escAt, `#${o.no ?? '?'} escalated to urgent`, C.alert, '');
+  push(o.x, 'cancelled', C.alert, '');
+});
+log.sort((a, b) => a.t - b.t);
+
+// Stands relevant to the shown day and organisation: used by a ULD task that is active that day
+// (including ULDs still waiting at the stand), or holding a plane that day.
+function relevantStands(d0) {
+  const d1 = d0 + 86400, keep = new Set();
+  D.tasks.forEach(t => {
+    if (!inOrg(t.company)) return;
+    const from = t.ready, to = (t.del || t.ev[t.ev.length - 1][0]) + 3 * 3600;
+    if (to < d0 || from >= d1) return;
+    [t.from, t.to].forEach(id => { if (byId[id]?.type === 'FlightStand') keep.add(id); });
+  });
+  D.flights.forEach(f => {
+    const out = f.etd || f.std;
+    if (!out || byId[f.stand]?.type !== 'FlightStand') return;
+    if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
+    if (out + 300 >= d0 && (f.sta || out - 150 * 60) < d1) keep.add(f.stand);
+  });
+  return allStands.filter(l => keep.has(l.id));
+}
+
+// ===== end of shared replay logic =====
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const fmtT = t => new Date(t * 1000).toISOString().slice(11, 16);
+const fmtD = t => new Date(t * 1000).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
+const dayStart = t => Math.floor(t / 86400) * 86400;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => t * t * (3 - 2 * t);
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } } };
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function statusStyle(st) {           // [text, soft background var, ink var, 3D colour]
+  switch (st.k) {
+    case 'dh': return ['To pickup', 'var(--info-soft)', 'var(--info)', C.pickup];
+    case 'atpick': return ['Loading', 'var(--info-soft)', 'var(--info)', C.pickup];
+    case 'carry': return st.o.full ? ['Full run', 'var(--accent-soft)', 'var(--accent-ink)', C.full] : ['Empty run', 'var(--teal-soft)', 'var(--teal)', C.empty];
+    case 'atdrop': return ['Unloading', st.o.full ? 'var(--accent-soft)' : 'var(--teal-soft)', st.o.full ? 'var(--accent-ink)' : 'var(--teal)', st.o.full ? C.full : C.empty];
+    case 'assigned': return ['Assigned', 'var(--violet-soft)', 'var(--violet)', C.assigned];
+    case 'idle': return ['Idle', 'var(--chip)', 'var(--muted)', C.idle];
+    default: return ['Off shift', 'var(--chip)', 'var(--muted)', '#c9c0b6'];
+  }
+}
+const pill = (txt, bg, fg) => `<span class="pill" style="background:${bg};color:${fg}">${esc(txt)}</span>`;
+const airlineOf = no => ({ UA: 'United Airlines', EI: 'Aer Lingus' })[String(no).slice(0, 2)] || 'Airline';
+const TAILC = { UA: '#1f3f8f', EI: '#1f8a5a' };
+
+// ---------- weather (real EGLL METARs + hourly archive) ----------
+const WX = window.WEATHER || null;
+const SKY = { FEW: 'Few clouds', SCT: 'Scattered cloud', BKN: 'Broken cloud', OVC: 'Overcast', NCD: 'No cloud', NSC: 'No cloud', CLR: 'Clear', SKC: 'Clear', VV: 'Sky obscured' };
+const WXTXT = [[/TS/, 'Thunderstorm'], [/SN/, 'Snow'], [/\+RA|\+SHRA/, 'Heavy rain'], [/-RA|-SHRA|-DZ|DZ/, 'Light rain'], [/RA/, 'Rain'], [/FG/, 'Fog'], [/BR/, 'Mist'], [/HZ/, 'Haze']];
+function wxAt(T) {
+  if (!WX || !WX.obs.length || T < WX.obs[0].t) return null;
+  let lo = 0, hi = WX.obs.length - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (WX.obs[m].t <= T) lo = m; else hi = m - 1; }
+  const o = WX.obs[lo];
+  if (T - o.t > 3 * 3600) return null;
+  const h = WX.hourly.find(r => r.t <= T && T < r.t + 3600);
+  const day = WX.sun.find(([a]) => dayStart(a) === dayStart(T));
+  const light = day ? clamp(Math.min((T - day[0] + 1200) / 2400, (day[1] + 1200 - T) / 2400), 0, 1) : 1;
+  const wet = /RA|DZ|SN|SH|TS/.test(o.wx), rate = /\+/.test(o.wx) ? 1 : /-/.test(o.wx) ? .35 : wet ? .65 : 0;
+  return { ...o, cloud: h ? h.cloud : null, light, rate, wet, day, what: (WXTXT.find(([r]) => r.test(o.wx)) || [, SKY[o.sky] || ''])[1] };
+}
+const compass = d => d == null ? 'variable' : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(d / 45) % 8];
+
+// ---------- scene state: the same rules as the other views ----------
+let layoutKey = null;
+function sceneState(T) {
+  const key = dayStart(T) + org;
+  if (key !== layoutKey) { layoutKey = key; layoutStands(relevantStands(dayStart(T))); groundDirty = true; }
+  const planeAt = new Map();
+  D.flights.forEach(f => {
+    const l = byId[f.stand]; if (!l || l.x == null || l.hall) return;
+    const out = f.etd || f.std; if (!out) return;
+    const inn = f.sta || out - 150 * 60;
+    if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
+    if (T >= inn && T <= out + 5 * 60) planeAt.set(l.id, f);
+  });
+  const piles = new Map();
+  const add = (l, t, a = 1) => { if (!piles.has(l.id)) piles.set(l.id, []); piles.get(l.id).push([t, a]); };
+  let waiting = 0;
+  D.tasks.forEach(t => {
+    if (!inOrg(t.company)) return;
+    const o = t.o, from = byId[t.from], to = byId[t.to];
+    const gone = o.vc ?? t.can ?? Infinity;
+    if (from.type !== 'Chute' && T >= t.ready && T < gone && !(t.can && T >= t.can)) { add(from, t); waiting++; }
+    if (t.del && o.vd != null && to.type !== 'Chute') {
+      const arrive = Math.max(o.vd, t.del);
+      let leave = arrive + 25 * 60;
+      if (!to.hall) {
+        const f = flights[t.flight], out = f && (f.etd || f.std);
+        leave = out && out > t.del ? Math.min(out, t.del + 3 * 3600) : arrive + 45 * 60;
+      }
+      if (T >= arrive && T < leave) add(to, t, to.hall ? .85 : 1);
+    }
+  });
+  bankItems.forEach(b => {
+    if (!inOrg(b.company) || T < b.t0 || T >= b.t1) return;
+    const full = T >= b.fullAt;
+    if (full) waiting++;
+    add(byId[b.bank], full ? b.task : { full: false });
+  });
+  // where each tug is: moving along its route, or parked beside the location it waits at
+  const states = drivers.filter(d => inOrg(d.company)).map(d => ({ d, st: driverState(d, T) }));
+  const parked = new Map();
+  states.forEach(({ d, st }) => {
+    d._p = null; d._path = null; d._s = 0;
+    if (st.k === 'off') return;
+    const ok = st.ra && st.ra.x != null && st.rb && st.rb.x != null;
+    let path = ok ? route(st.ra, st.rb) : null;
+    const moving = st.k === 'dh' || st.k === 'carry';
+    if (moving && !path) return;
+    if (moving) { d._s = (T - st.t0) / Math.max(1, st.t1 - st.t0) * path.len; d._p = pointAt(path, d._s); d._path = path; d._moving = true; return; }
+    d._moving = false;
+    const l = st.loc || st.o?.from; if (!l || l.x == null) return;
+    const n = parked.get(l.id) || 0; parked.set(l.id, n + 1);
+    if (path && n === 0) { d._s = path.len; d._p = pointAt(path, d._s); d._path = path; }
+    else {
+      const off = (n % 2 ? 1 : -1) * (9 + 12 * Math.floor(n / 2)), v = ROADS[l.seg]?.v;
+      d._p = { x: l.ax + (v ? 0 : off), y: l.ay + (v ? off : 0), dx: v ? 0 : 1, dy: v ? 1 : 0 };
+    }
+  });
+  return { states, planeAt, piles, waiting };
+}
+
+// ---------- three.js world ----------
+const canvas = $('gl');
+// without WebGL the panels and data still work; the 3D view shows a note instead
+const renderer = (() => { try { return new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); } catch (e) { return null; } })() || (() => {
+  const n = document.createElement('div'); n.className = 'glass'; n.style.cssText = 'position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);padding:16px 20px;z-index:2;max-width:360px';
+  n.textContent = 'This browser could not start the 3D view (WebGL is off or unsupported). The live panels below still update.'; document.getElementById('app').append(n);
+  return { setPixelRatio() {}, setSize() {}, render() {}, shadowMap: {}, capabilities: { getMaxAnisotropy: () => 1 } };
+})();
+const isPhone = () => window.innerWidth <= 760;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isPhone() ? 1.5 : 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+const DAYSKY = new THREE.Color('#efe6db'), NIGHTSKY = new THREE.Color('#141a2c');
+scene.background = DAYSKY.clone();
+scene.fog = new THREE.Fog(DAYSKY.clone(), 1800, 6000);
+const camera = new THREE.PerspectiveCamera(30, 1, 4, 12000);
+const hemi = new THREE.HemisphereLight('#fff2e2', '#8a7660', .42); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff0dc', 1.0);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0006; sun.shadow.normalBias = .4;
+scene.add(sun, sun.target);
+const ambient = new THREE.AmbientLight('#ffffff', .08); scene.add(ambient);
+const M = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: .82, metalness: 0, ...o });
+const mat = {
+  grass: M('#b9c79c', { roughness: 1 }), clay: M('#f7f2ea'), roof: M('#e4dace'), wall2: M('#ece4d8'),
+  glass: M('#9db3c2', { roughness: .25, metalness: .1, emissive: new THREE.Color('#ffcf8f'), emissiveIntensity: 0 }),
+  dark: M('#2c2a31', { roughness: .5 }), tyre: M('#2f2d2c', { roughness: .9 }), steel: M('#cfc8be', { roughness: .6, metalness: .2 }),
+  bridge: M('#e9e3da'), accent: M('#ff6a1a', { roughness: .6 }), hall: M('#f0e9df'), hallRoof: M('#ff6a1a', { roughness: .7 }),
+  door: M('#4a4650', { roughness: .6 }), ok: M('#2f8f5b'), uldFull: M('#ff7a2e', { roughness: .6 }), uldEmpty: M('#f7f3ed', { roughness: .7 }),
+  dolly: M('#8d857c', { roughness: .7 }), red: M('#d33a2c', { emissive: new THREE.Color('#d33a2c'), emissiveIntensity: .6 }),
+  trunk: M('#8a6a4a'), leaf: M('#7fb27a', { roughness: .95 }), leaf2: M('#94c08a', { roughness: .95 }),
+  runway: M('#6d6964', { roughness: .95 }), lamp: M('#fff3d6', { emissive: new THREE.Color('#ffd89a'), emissiveIntensity: 0 }),
+  tower: M('#f2ece4'), towerGlass: M('#7f98a8', { roughness: .2, emissive: new THREE.Color('#bfe3ff'), emissiveIntensity: 0 }),
+};
+const nightMats = [];   // materials that glow at night: [material, max intensity]
+
+// world bounds (map metres: x east, y south) -> three: X = x, Z = y, Y up
+const GX0 = 40, GY0 = -500, GX1 = 2140, GY1 = 920;
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), mat.grass);
+ground.rotation.x = -Math.PI / 2; ground.position.set(1100, -.05, 200); ground.receiveShadow = true; scene.add(ground);
+
+// one painted ground texture: apron, roads, taxi lines, stand markings, runway paint
+const GW = GX1 - GX0, GH = GY1 - GY0;
+const gcan = document.createElement('canvas');
+const GPX = isPhone() ? 1.45 : 1.95;                 // pixels per metre
+gcan.width = Math.round(GW * GPX); gcan.height = Math.round(GH * GPX);
+const gtex = new THREE.CanvasTexture(gcan);
+gtex.encoding = THREE.sRGBEncoding; gtex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+const groundMat = new THREE.MeshStandardMaterial({ map: gtex, roughness: .9, metalness: 0, transparent: true });
+const apron = new THREE.Mesh(new THREE.PlaneGeometry(GW, GH), groundMat);
+apron.rotation.x = -Math.PI / 2; apron.position.set(GX0 + GW / 2, 0, GY0 + GH / 2); apron.receiveShadow = true; scene.add(apron);
+let groundDirty = true;
+
+// ---------- obstacles and the taxi network for the aircraft ----------
+const inPoly = (x, y, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+const HALL_PTS = [[HALL.x0, HALL.y0], [HALL.x1, HALL.y0], [HALL.x1, HALL.y1], [HALL.x0, HALL.y1]];
+const yards = hall.filter(l => l.yard);
+const OBST = ML.buildings.concat([HALL_PTS], yards.map(l => [[l.yard.x0, l.yard.y0], [l.yard.x1, l.yard.y0], [l.yard.x1, l.yard.y1], [l.yard.x0, l.yard.y1]]));
+function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy || 1, t = clamp(((px - ax) * dx + (py - ay) * dy) / L, 0, 1); return Math.hypot(px - ax - t * dx, py - ay - t * dy); }
+function polyDist(x, y, pts) { if (inPoly(x, y, pts)) return 0; let d = Infinity; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; d = Math.min(d, segDist(x, y, a[0], a[1], b[0], b[1])); } return d; }
+const RWY = { y: -430, x0: 140, x1: 2060, w: 46 };
+const CELL = 15, AX0 = -120, AY0 = -520, ANX = 160, ANY = 98;
+const blocked = new Uint8Array(ANX * ANY), penalty = new Uint8Array(ANX * ANY);
+const standRects = allStands.filter(l => l.nose).map(l => { const F = standFrame(l); return [F(-21, -3), F(21, -3), F(21, 50), F(-21, 50)]; });
+for (let j = 0; j < ANY; j++) for (let i = 0; i < ANX; i++) {
+  const x = AX0 + (i + .5) * CELL, y = AY0 + (j + .5) * CELL;
+  let b = false;
+  for (const p of OBST) { if (polyDist(x, y, p) < 22) { b = true; break; } }
+  blocked[j * ANX + i] = b ? 1 : 0;
+  if (!b) for (const r of standRects) if (polyDist(x, y, r) < 4) { penalty[j * ANX + i] = 1; break; }
+}
+function standFrame(l) { const [nx, ny] = l.nose, [hx, hy] = l.h; return (lx, ly) => [nx - hx * ly - hy * lx, ny - hy * ly + hx * lx]; }
+const cellOf = (x, y) => [clamp(Math.floor((x - AX0) / CELL), 0, ANX - 1), clamp(Math.floor((y - AY0) / CELL), 0, ANY - 1)];
+function astar(a, b) {
+  const [si, sj] = cellOf(a[0], a[1]), [gi, gj] = cellOf(b[0], b[1]);
+  const N = ANX * ANY, g = new Float32Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+  const heap = []; const push = (k, f) => { heap.push([f, k]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  const s = sj * ANX + si, goal = gj * ANX + gi; g[s] = 0; push(s, 0);
+  const D8 = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
+  while (heap.length) {
+    const [, k] = pop(); if (closed[k]) continue; closed[k] = 1; if (k === goal) break;
+    const i = k % ANX, j = (k / ANX) | 0;
+    for (const [di, dj, w] of D8) {
+      const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= ANX || nj >= ANY) continue;
+      const n = nj * ANX + ni; if (closed[n]) continue;
+      if (blocked[n] && n !== goal && n !== s) continue;
+      const c = g[k] + w * (penalty[n] ? 6 : 1);
+      if (c < g[n]) { g[n] = c; prev[n] = k; push(n, c + Math.hypot(ni - gi, nj - gj)); }
+    }
+  }
+  if (prev[goal] < 0 && goal !== s) return [a, b];
+  const cells = []; for (let k = goal; k >= 0; k = prev[k]) { cells.unshift(k); if (k === s) break; }
+  const pts = cells.map(k => [AX0 + ((k % ANX) + .5) * CELL, AY0 + (((k / ANX) | 0) + .5) * CELL]);
+  pts[0] = a; pts[pts.length - 1] = b;
+  // string-pull: keep only the corners we need
+  const clear = (p, q) => { const L = Math.hypot(q[0] - p[0], q[1] - p[1]), n = Math.ceil(L / 5); for (let t = 1; t < n; t++) { const [i, j] = cellOf(lerp(p[0], q[0], t / n), lerp(p[1], q[1], t / n)), c = j * ANX + i; if (blocked[c] || penalty[c]) return false; } return true; };
+  const out = [pts[0]]; let i = 0;
+  while (i < pts.length - 1) { let j = pts.length - 1; while (j > i + 1 && !clear(pts[i], pts[j])) j--; out.push(pts[j]); i = j; }
+  return out;
+}
+// smooth a corner path into a sampled curve with arc length
+function curve(pts, step = 4) {
+  let P = pts;
+  if (pts.length > 2) {
+    const v = pts.map(([x, y]) => new THREE.Vector3(x, 0, y));
+    const c = new THREE.CatmullRomCurve3(v, false, 'centripetal', .5), len = c.getLength();
+    P = c.getSpacedPoints(Math.max(2, Math.ceil(len / step))).map(p => [p.x, p.z]);
+  }
+  const cum = [0]; for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+  return { pts: P, cum, len: cum[cum.length - 1] };
+}
+function along(c, s) {
+  s = clamp(s, 0, c.len);
+  let lo = 0, hi = c.cum.length - 1; while (lo < hi - 1) { const m = (lo + hi) >> 1; if (c.cum[m] <= s) lo = m; else hi = m; }
+  const a = c.pts[lo], b = c.pts[hi] || a, f = (s - c.cum[lo]) / ((c.cum[hi] - c.cum[lo]) || 1);
+  return { x: lerp(a[0], b[0], f), y: lerp(a[1], b[1], f), yaw: Math.atan2(-(b[1] - a[1]), (b[0] - a[0]) || 1e-6) };
+}
+// the runway in use follows the real wind: westerlies land and depart on 27R (westbound), easterlies on 09L
+const rwyDir = T => { const w = wxAt(T); if (!w || w.dir == null || (w.kt ?? 0) < 4) return -1; return w.dir > 0 && w.dir < 180 ? 1 : -1; };
+function runwayPts(dir) {   // touchdown, exit, line-up and lift-off points for each direction
+  return dir < 0 ? { thr: RWY.x1 - 60, td: RWY.x1 - 360, exit: RWY.x1 - 1760, line: RWY.x1 - 40, lift: RWY.x1 - 1540 }
+                 : { thr: RWY.x0 + 60, td: RWY.x0 + 360, exit: RWY.x0 + 1760, line: RWY.x0 + 40, lift: RWY.x0 + 1540 };
+}
+const pathCache = new Map(), astarCache = new Map();
+function taxiPaths(l, dirIn, dirOut) {
+  const key = l.id + dirIn + dirOut;
+  if (pathCache.has(key)) return pathCache.get(key);
+  const F = standFrame(l), S = F(0, 2), Lp = F(0, 70);
+  const ri = runwayPts(dirIn), ro = runwayPts(dirOut);
+  const exitPt = [ri.exit, RWY.y], exitOff = [ri.exit + dirIn * 40, RWY.y + 50];
+  const hold = [ro.line - dirOut * 30, RWY.y + 70], line = [ro.line, RWY.y];
+  const kIn = l.id + 'i' + dirIn, kOut = l.id + 'o' + dirOut;
+  if (!astarCache.has(kIn)) astarCache.set(kIn, astar(exitOff, Lp));
+  if (!astarCache.has(kOut)) astarCache.set(kOut, astar(Lp, hold));
+  const inner = astarCache.get(kIn), outer = astarCache.get(kOut);
+  const res = { S, L: Lp, inC: curve([exitPt, ...inner, S]), outC: curve([...outer, [ro.line + dirOut * 10, RWY.y + 30], line]), ri, ro };
+  pathCache.set(key, res); return res;
+}
+// a flight's movements: approach, roll-out, taxi in, on stand, pushback, taxi out, take-off
+const TAXI = 9, VTD = 70, VEXIT = 12;
+function flightPlan(f) {
+  const l = byId[f.stand]; if (!l || !l.nose) return null;
+  const out = f.etd || f.std; if (!out) return null;
+  const inn = f.sta || out - 150 * 60;
+  if (f._plan && f._plan.inn === inn && f._plan.out === out) return f._plan;
+  const dirIn = rwyDir(inn - 600), dirOut = rwyDir(out + 300);
+  const p = taxiPaths(l, dirIn, dirOut);
+  const tExit = inn - p.inC.len / TAXI, rollD = Math.abs(p.ri.td - p.ri.exit), rollT = 2 * rollD / (VTD + VEXIT);
+  const tTouch = tExit - rollT, tApp = tTouch - 28;
+  const tPushEnd = out + 75, tTaxi = tPushEnd + 15, tHold = tTaxi + p.outC.len / TAXI, tRoll = tHold + 15;
+  const VR = 76, takeD = Math.abs(p.ro.lift - p.ro.line), takeT = 2 * takeD / VR, tLift = tRoll + takeT;
+  return (f._plan = { f, l, inn, out, dirIn, dirOut, ...p, tApp, tTouch, tExit, rollT, tPushEnd, tTaxi, tHold, tRoll, tLift, takeT, VR, tGone: tLift + 45 });
+}
+function planePose(pl, T) {
+  if (T < pl.tApp || T > pl.tGone) return null;
+  const { ri, ro, inC, outC, S, l } = pl, hyaw = Math.atan2(-l.h[1], l.h[0]);
+  if (T < pl.tTouch) {   // final approach on a 3 degree slope
+    const d = (pl.tTouch - T) * VTD, x = ri.td + pl.dirIn * -d;
+    return { x, y: RWY.y, z: d * .052, yaw: pl.dirIn > 0 ? 0 : Math.PI, gear: 1, phase: 'Landing', pitch: .04 };
+  }
+  if (T < pl.tExit) {    // roll-out, braking to taxi speed
+    const t = T - pl.tTouch, a = (VTD - VEXIT) / pl.rollT, s = VTD * t - a * t * t / 2;
+    return { x: ri.td + pl.dirIn * s, y: RWY.y, z: 0, yaw: pl.dirIn > 0 ? 0 : Math.PI, gear: 1, phase: 'Landing' };
+  }
+  if (T < pl.inn) { const p = along(inC, (T - pl.tExit) * TAXI); return { ...p, z: 0, gear: 1, phase: 'Taxi in' }; }
+  if (T < pl.out) return { x: S[0], y: S[1], z: 0, yaw: hyaw, gear: 1, phase: 'On stand' };
+  if (T < pl.tTaxi) {    // pushback straight out of the stand, then turned onto the taxilane
+    const t = clamp((T - pl.out) / 60, 0, 1), s = ease(t) * 68;
+    const x = S[0] - l.h[0] * s, y = S[1] - l.h[1] * s;
+    const turn = clamp((T - pl.out - 45) / 40, 0, 1), y0 = outC.pts.length > 1 ? along(outC, 8).yaw : hyaw;
+    let dy = y0 - hyaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI;
+    return { x, y, z: 0, yaw: hyaw + dy * ease(turn), gear: 1, phase: 'Pushback', push: T < pl.tPushEnd };
+  }
+  if (T < pl.tHold) { const p = along(outC, (T - pl.tTaxi) * TAXI); return { ...p, z: 0, gear: 1, phase: 'Taxi out' }; }
+  if (T < pl.tRoll) return { x: ro.line, y: RWY.y, z: 0, yaw: pl.dirOut > 0 ? 0 : Math.PI, gear: 1, phase: 'Line up' };
+  const t = T - pl.tRoll, a = pl.VR / pl.takeT;
+  if (T < pl.tLift) return { x: ro.line + pl.dirOut * a * t * t / 2, y: RWY.y, z: 0, yaw: pl.dirOut > 0 ? 0 : Math.PI, gear: 1, phase: 'Take-off', pitch: t > pl.takeT - 3 ? .08 : 0 };
+  const u = T - pl.tLift, d = Math.abs(pl.ro.lift - pl.ro.line) + pl.VR * u;
+  return { x: ro.line + pl.dirOut * d, y: RWY.y, z: u * pl.VR * .13, yaw: pl.dirOut > 0 ? 0 : Math.PI, gear: clamp(1 - (u - 3) / 5, 0, 1), phase: 'Climb', pitch: .14, fade: clamp((pl.tGone - T) / 12, 0, 1) };
+}
+
+// ---------- painted ground ----------
+function paintGround(active) {
+  const g = gcan.getContext('2d'), s = GPX;
+  g.setTransform(s, 0, 0, s, -GX0 * s, -GY0 * s);
+  g.clearRect(GX0, GY0, GW, GH);
+  // apron concrete with soft slab joints
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); };
+  g.fillStyle = '#dcd4c8'; rr(330, -40, 1330, 940, 26); g.fill();
+  g.fillStyle = '#dcd4c8'; rr(1500, 300, 600, 600, 26); g.fill();
+  g.strokeStyle = 'rgba(120,96,70,.08)'; g.lineWidth = .6;
+  for (let x = 340; x < 2100; x += 24) { g.beginPath(); g.moveTo(x, -40); g.lineTo(x, 900); g.stroke(); }
+  for (let y = -40; y < 900; y += 24) { g.beginPath(); g.moveTo(330, y); g.lineTo(2100, y); g.stroke(); }
+  // runway 09L/27R with threshold bars, designators and centre line
+  g.fillStyle = '#d9d2c6'; rr(RWY.x0 - 30, RWY.y - 70, RWY.x1 - RWY.x0 + 60, 140, 10); g.fill();
+  g.fillStyle = '#5f5b56'; g.fillRect(RWY.x0, RWY.y - RWY.w / 2, RWY.x1 - RWY.x0, RWY.w);
+  g.fillStyle = 'rgba(255,255,255,.9)';
+  for (let x = RWY.x0 + 140; x < RWY.x1 - 140; x += 50) g.fillRect(x, RWY.y - .6, 28, 1.2);
+  [RWY.x0 + 8, RWY.x1 - 38].forEach(x0 => { for (let k = -8; k <= 8; k++) if (k) g.fillRect(x0, RWY.y + k * 2.5 - .8, 30, 1.6); });
+  g.fillRect(RWY.x0, RWY.y - RWY.w / 2 + 1, RWY.x1 - RWY.x0, .7); g.fillRect(RWY.x0, RWY.y + RWY.w / 2 - 1.7, RWY.x1 - RWY.x0, .7);
+  g.save(); g.font = '800 18px Archivo, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.translate(RWY.x0 + 60, RWY.y); g.rotate(Math.PI / 2); g.fillText('09L', 0, 0); g.restore();
+  g.save(); g.font = '800 18px Archivo, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.translate(RWY.x1 - 60, RWY.y); g.rotate(-Math.PI / 2); g.fillText('27R', 0, 0); g.restore();
+  // airside service roads
+  ROADS.forEach(r => {
+    const [x0, x1] = [Math.min(r.a[0], r.b[0]), Math.max(r.a[0], r.b[0])], [y0, y1] = [Math.min(r.a[1], r.b[1]), Math.max(r.a[1], r.b[1])];
+    g.fillStyle = '#c9c0b3'; g.fillRect(x0 - 7, y0 - 7, x1 - x0 + 14, y1 - y0 + 14);
+  });
+  g.fillStyle = 'rgba(255,255,255,.85)';
+  ROADS.forEach(r => { const len = Math.abs(r.b[0] - r.a[0]) + Math.abs(r.b[1] - r.a[1]); for (let t = 4; t < len - 4; t += 12) r.v ? g.fillRect(r.a[0] - .35, Math.min(r.a[1], r.b[1]) + t, .7, 6) : g.fillRect(Math.min(r.a[0], r.b[0]) + t, r.a[1] - .35, 6, .7); });
+  // stands: in use today in orange with a lead-in line, the rest faint
+  allStands.forEach(l => {
+    if (!l.nose) return;
+    const on = active.has(l.id), F = standFrame(l);
+    const c = [F(-21, -3), F(21, -3), F(21, 46), F(-21, 46)];
+    g.beginPath(); c.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath();
+    if (on) { g.fillStyle = 'rgba(255,250,244,.6)'; g.fill(); }
+    g.strokeStyle = on ? 'rgba(255,106,26,.9)' : 'rgba(120,96,70,.22)'; g.lineWidth = on ? .8 : .5; g.stroke();
+    g.beginPath(); const a = F(0, 0), b = F(0, 70); g.moveTo(...a); g.lineTo(...b);
+    g.strokeStyle = on ? 'rgba(232,170,40,.95)' : 'rgba(120,96,70,.2)'; g.lineWidth = on ? 1 : .5; g.stroke();
+    const s1 = F(-5, 1), s2 = F(5, 1); g.beginPath(); g.moveTo(...s1); g.lineTo(...s2); g.lineWidth = on ? 1.4 : .7; g.stroke();
+    const [tx, ty] = F(0, 40);
+    g.save(); g.translate(tx, ty); g.font = `800 ${on ? 9 : 7}px Archivo, Arial`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = on ? '#c94a06' : 'rgba(120,96,70,.45)'; g.fillText(l.name, 0, 0); g.restore();
+  });
+  // can stores and the dock in front of the bank doors
+  yards.forEach(l => { const y = l.yard; g.fillStyle = '#e2ddd0'; rr(y.x0, y.y0, y.x1 - y.x0, y.y1 - y.y0, 3); g.fill(); g.setLineDash([3, 2]); g.strokeStyle = 'rgba(120,96,70,.45)'; g.lineWidth = .6; g.stroke(); g.setLineDash([]); });
+  g.fillStyle = '#e3dbcf'; g.fillRect(HALL.x1, HALL.y0, 24, HALL.y1 - HALL.y0);
+  gtex.needsUpdate = true;
+}
+
+// ---------- buildings: clay blocks with a glass band that glows at night ----------
+function shapeOf(pts, scale = 1) {
+  const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+  const s = new THREE.Shape(); pts.forEach(([x, y], i) => { const X = cx + (x - cx) * scale, Y = -(cy + (y - cy) * scale); i ? s.lineTo(X, Y) : s.moveTo(X, Y); }); s.closePath(); return s;
+}
+function extrude(pts, h, mats, y0 = 0, scale = 1) {
+  const g = new THREE.ExtrudeGeometry(shapeOf(pts, scale), { depth: h, bevelEnabled: false });
+  const m = new THREE.Mesh(g, mats); m.rotation.x = -Math.PI / 2; m.position.y = y0; m.castShadow = true; m.receiveShadow = true; return m;
+}
+const BLD = ML.buildings.map(pts => { const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return { pts, w: Math.max(...xs) - Math.min(...xs), d: Math.max(...ys) - Math.min(...ys) }; });
+const world = new THREE.Group(); scene.add(world);
+BLD.forEach(b => {
+  const h = Math.min(b.w, b.d) < 70 ? 14 : 22;
+  world.add(extrude(b.pts, h, [mat.roof, mat.clay]));
+  world.add(extrude(b.pts, 6, [mat.glass, mat.glass], 6.5, 1.004));     // glass facade band
+  world.add(extrude(b.pts, .9, [mat.wall2, mat.wall2], h, 1.006));       // parapet
+});
+nightMats.push([mat.glass, .95]);
+// T1 baggage hall with an orange sawtooth roof and the bank doors on its east face
+{
+  const { x0, y0, x1, y1 } = HALL, h = 24;
+  const box = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, y1 - y0), mat.hall);
+  box.position.set((x0 + x1) / 2, h / 2, (y0 + y1) / 2); box.castShadow = box.receiveShadow = true; world.add(box);
+  for (let y = y0 + 8; y < y1 - 14; y += 30) {
+    const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(12, 0); sh.lineTo(12, 7); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: x1 - x0 - 4, bevelEnabled: false });
+    const m = new THREE.Mesh(g, [mat.hallRoof, mat.hallRoof]); m.rotation.y = Math.PI / 2; m.position.set(x0 + 2, h, y + 12); m.castShadow = true; world.add(m);
+  }
+  chutes.forEach(l => {
+    const d = new THREE.Mesh(new THREE.BoxGeometry(.6, 13, 16), mat.door); d.position.set(x1 + .2, 6.5, l.y); world.add(d);
+    const f = new THREE.Mesh(new THREE.BoxGeometry(.8, 1.2, 18), mat.accent); f.position.set(x1 + .3, 13.6, l.y); world.add(f);
+  });
+}
+// the sign on Terminal 2A's roof
+{
+  const c = document.createElement('canvas'); c.width = 2048; c.height = 512; const g = c.getContext('2d');
+  const draw = () => {
+    g.clearRect(0, 0, 2048, 512);
+    g.fillStyle = '#fffaf4'; g.beginPath(); g.roundRect ? g.roundRect(8, 8, 2032, 496, 70) : g.rect(8, 8, 2032, 496); g.fill();
+    g.fillStyle = '#ff6a1a'; g.beginPath(); g.roundRect ? g.roundRect(70, 92, 328, 328, 84) : g.rect(70, 92, 328, 328); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 26; g.lineCap = 'round'; g.beginPath(); g.moveTo(140, 300); g.bezierCurveTo(230, 296, 260, 180, 330, 176); g.stroke();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(330, 176, 24, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#221c17'; g.font = '800 196px Archivo, Arial'; g.textBaseline = 'alphabetic'; g.fillText('Flow', 450, 300);
+    g.fillStyle = '#ff6a1a'; g.fillText('CTRL', 450 + g.measureText('Flow ').width, 300);
+    g.fillStyle = '#7d7167'; g.font = '700 84px Archivo, Arial'; g.fillText('at Hearhow Airport', 456, 410);
+    tex.needsUpdate = true;
+  };
+  const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
+  const signMat = new THREE.MeshStandardMaterial({ map: tex, roughness: .6, emissive: new THREE.Color('#ffffff'), emissiveMap: tex, emissiveIntensity: 0, transparent: true });
+  nightMats.push([signMat, .8]);
+  draw(); if (document.fonts) document.fonts.load('800 40px Archivo').then(draw).catch(() => {});
+  const t2a = BLD.find(b => inPoly(583, 590, b.pts)) || BLD[0];
+  const xs = t2a.pts.map(p => p[0]), ys = t2a.pts.map(p => p[1]);
+  const sx = (Math.min(...xs) + Math.max(...xs)) / 2, sy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const sign = new THREE.Group();
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(112, 28), signMat); board.position.y = 18; sign.add(board);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(114, 30, 1.2), mat.wall2); back.position.set(0, 18, -.7); back.castShadow = true; sign.add(back);
+  [-42, 42].forEach(x => { const p = new THREE.Mesh(new THREE.BoxGeometry(1.6, 6, 1.6), mat.steel); p.position.set(x, 1.5, -.7); sign.add(p); });
+  sign.position.set(sx, 22, sy); sign.rotation.y = .7; world.add(sign);
+}
+// control tower, floodlight masts, trees: scenery only
+{
+  const tw = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(4, 5.5, 62, 20), mat.tower); shaft.position.y = 31; tw.add(shaft);
+  const cab = new THREE.Mesh(new THREE.CylinderGeometry(9, 7.5, 8, 20), mat.towerGlass); cab.position.y = 66; tw.add(cab);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 1.6, 20), mat.accent); cap.position.y = 70.8; tw.add(cap);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(.3, .3, 10, 6), mat.steel); mast.position.y = 76; tw.add(mast);
+  tw.traverse(o => { if (o.isMesh) o.castShadow = true; }); tw.position.set(1590, 0, 180); world.add(tw);
+  nightMats.push([mat.towerGlass, 1]);
+}
+const MASTS = [[880, 30], [1240, 30], [960, 860], [1300, 860], [600, 840], [1450, 440], [1650, 380], [430, 30]].filter(([x, y]) => !OBST.some(p => polyDist(x, y, p) < 8));
+const poolTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, 'rgba(255,214,150,.9)'); r.addColorStop(1, 'rgba(255,214,150,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
+MASTS.forEach(([x, y]) => {
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(.45, .7, 30, 8), mat.steel); p.position.set(x, 15, y); p.castShadow = true; world.add(p);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(5, 1.4, 2.4), mat.lamp); head.position.set(x, 30.5, y); world.add(head);
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(70, 32), poolMat); pool.rotation.x = -Math.PI / 2; pool.position.set(x, .25, y); scene.add(pool);
+});
+nightMats.push([mat.lamp, 1.6]);
+// runway edge lights
+const edgeGeo = new THREE.SphereGeometry(.9, 8, 6), edgeMat = M('#fff6df', { emissive: new THREE.Color('#ffe2a8'), emissiveIntensity: 0 });
+nightMats.push([edgeMat, 2.2]);
+{
+  const pos = []; for (let x = RWY.x0; x <= RWY.x1; x += 60) pos.push([x, RWY.y - RWY.w / 2 - 2], [x, RWY.y + RWY.w / 2 + 2]);
+  const im = new THREE.InstancedMesh(edgeGeo, edgeMat, pos.length), m4 = new THREE.Matrix4();
+  pos.forEach(([x, y], i) => { m4.makeTranslation(x, .6, y); im.setMatrixAt(i, m4); }); scene.add(im);
+}
+{
+  const TREES = [];
+  for (let i = 0; i < 160; i++) {
+    const a = i * 2.39996, r = 60 + (i * 37 % 900);
+    const x = 1100 + Math.cos(a) * (700 + r * .9), y = 230 + Math.sin(a) * (520 + r * .55);
+    if (x > 300 && x < 2120 && y > -520 && y < 905) continue;          // keep trees off the airfield
+    TREES.push([x, y, .8 + (i % 5) * .12]);
+  }
+  [[380, 860], [410, 900], [1560, 70], [1600, 110], [1700, 300], [1760, 260], [300, 300], [280, 380]].forEach(([x, y]) => { if (!OBST.some(p => polyDist(x, y, p) < 12)) TREES.push([x, y, 1]); });
+  const tg = new THREE.CylinderGeometry(.5, .7, 5, 6), cg = new THREE.IcosahedronGeometry(5.2, 0);
+  const ti = new THREE.InstancedMesh(tg, mat.trunk, TREES.length), ci = new THREE.InstancedMesh(cg, mat.leaf, TREES.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  TREES.forEach(([x, y, k], i) => {
+    s.set(k, k, k); m4.compose(new THREE.Vector3(x, 2.5 * k, y), q, s); ti.setMatrixAt(i, m4);
+    q.setFromEuler(new THREE.Euler(i, i * .7, 0)); m4.compose(new THREE.Vector3(x, 8 * k, y), q, s.set(k * 1.1, k * 1.25, k * 1.1)); ci.setMatrixAt(i, m4); q.identity();
+  });
+  ti.castShadow = ci.castShadow = true; scene.add(ti, ci);
+}
+
+// ---------- jet bridges (contact stands only) ----------
+const bridges = new Map();
+allStands.forEach(l => {
+  if (!l.nose) return;
+  const F = standFrame(l), base = F(-13, -9), bx = base[0] + l.h[0] * 8, by = base[1] + l.h[1] * 8;
+  if (!BLD.some(b => inPoly(bx, by, b.pts))) return;
+  const g = new THREE.Group();
+  const rot = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 6, 14), mat.bridge); rot.position.y = 4.5; g.add(rot);
+  const tube = new THREE.Mesh(new THREE.BoxGeometry(1, 3.2, 3.2), mat.bridge); tube.position.y = 5.2; g.add(tube);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.6, 4), mat.bridge); cab.position.y = 5.2; g.add(cab);
+  const leg = new THREE.Mesh(new THREE.BoxGeometry(.8, 3.6, .8), mat.steel); leg.position.y = 1.8; g.add(leg);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  g.position.set(base[0], 0, base[1]); world.add(g);
+  bridges.set(l.id, { g, tube, cab, leg, ext: 0, base, door: F(-2.8, 6.5) });
+});
+function poseBridge(b, ext) {
+  const [bx, by] = b.base, rest = [bx + (b.door[0] - bx) * .45, by + (b.door[1] - by) * .45];
+  const tx = lerp(rest[0], b.door[0], ext), ty = lerp(rest[1], b.door[1], ext);
+  const dx = tx - bx, dy = ty - by, L = Math.hypot(dx, dy), yaw = Math.atan2(-dy, dx);
+  b.tube.scale.x = Math.max(1, L - 3); b.tube.position.set(Math.cos(yaw) * L / 2, 5.2, -Math.sin(yaw) * L / 2); b.tube.rotation.y = yaw;
+  b.cab.position.set(Math.cos(yaw) * L, 5.2, -Math.sin(yaw) * L); b.cab.rotation.y = yaw;
+  b.leg.position.set(Math.cos(yaw) * (L - 3), 1.8, -Math.sin(yaw) * (L - 3));
+}
+bridges.forEach(b => poseBridge(b, 0));
+
+// ---------- aircraft: A320-style, built from primitives, shared geometry ----------
+function bodyTexture(stripe) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512; const g = c.getContext('2d');
+  const e = document.createElement('canvas'); e.width = 512; e.height = 512; const h = e.getContext('2d');
+  g.fillStyle = '#f8f5f0'; g.fillRect(0, 0, 512, 512); h.fillStyle = '#000'; h.fillRect(0, 0, 512, 512);
+  // windows sit just above the side lines (u = .04 and u = .46 run along the length)
+  [.035, .465].forEach(u => {
+    const x = u * 512;
+    g.fillStyle = stripe; g.fillRect(x - 8, 40, 16, 440);
+    for (let v = 70; v < 430; v += 13) { g.fillStyle = '#2c2a31'; g.fillRect(x - 3, v, 6, 7); h.fillStyle = '#ffd89a'; h.fillRect(x - 3, v, 6, 7); }
+  });
+  const t = new THREE.CanvasTexture(c), te = new THREE.CanvasTexture(e); t.encoding = THREE.sRGBEncoding; return [t, te];
+}
+function logoTexture(no) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(64, 64, 60, 0, Math.PI * 2); g.fill();
+  g.fillStyle = TAILC[no] || '#ff6a1a'; g.font = '800 54px Archivo, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(no || '✈', 64, 68);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+}
+const PG = (() => {
+  const body = new THREE.CylinderGeometry(2.1, 2.1, 30, 24, 1, true); body.rotateZ(-Math.PI / 2);
+  const nose = new THREE.SphereGeometry(2.1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2); nose.rotateZ(-Math.PI / 2); nose.scale(2.2, 1, 1); nose.translate(15, 0, 0);
+  const tail = new THREE.CylinderGeometry(.45, 2.1, 7.5, 24, 1, true); tail.rotateZ(Math.PI / 2); tail.translate(-18.7, .7, 0);
+  const tailCap = new THREE.SphereGeometry(.45, 10, 8); tailCap.translate(-22.4, .9, 0);
+  const visor = new THREE.BoxGeometry(1.4, .6, 2.6); visor.translate(18.2, .95, 0);
+  const wingShape = side => { const s = new THREE.Shape(); s.moveTo(3, 0); s.lineTo(-6.6, 17 * side); s.lineTo(-8.8, 17 * side); s.lineTo(-4.6, 0); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: .45, bevelEnabled: false }); g.rotateX(Math.PI / 2); return g; };
+  const stabShape = side => { const s = new THREE.Shape(); s.moveTo(-15.5, 0); s.lineTo(-19.3, 6.6 * side); s.lineTo(-20.8, 6.6 * side); s.lineTo(-19.6, 0); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: .3, bevelEnabled: false }); g.rotateX(Math.PI / 2); return g; };
+  const fin = (() => { const s = new THREE.Shape(); s.moveTo(-14.2, 1.6); s.lineTo(-19.6, 9.2); s.lineTo(-21.8, 9.2); s.lineTo(-21.2, 1.2); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: .4, bevelEnabled: false }); g.translate(0, 0, -.2); return g; })();
+  const winglet = new THREE.BoxGeometry(1.6, 2.2, .25);
+  const eng = new THREE.CylinderGeometry(1.15, .95, 4.4, 18); eng.rotateZ(-Math.PI / 2);
+  const intake = new THREE.CircleGeometry(.95, 18); intake.rotateY(Math.PI / 2);
+  const pylon = new THREE.BoxGeometry(2.8, 1.2, .35);
+  const strut = new THREE.CylinderGeometry(.16, .16, 1.6, 6), wheel = new THREE.CylinderGeometry(.55, .55, .45, 12); wheel.rotateX(Math.PI / 2);
+  const logo = new THREE.CircleGeometry(1.35, 24);
+  return { body, nose, tail, tailCap, visor, wingL: wingShape(-1), wingR: wingShape(1), stabL: stabShape(-1), stabR: stabShape(1), fin, winglet, eng, intake, pylon, strut, wheel, logo };
+})();
+const liveries = {};
+function livery(no) {
+  const k = String(no).slice(0, 2);
+  if (liveries[k]) return liveries[k];
+  const tc = TAILC[k] || '#ff6a1a', [map, emap] = bodyTexture(tc);
+  const body = new THREE.MeshStandardMaterial({ color: '#ffffff', map, emissive: new THREE.Color('#ffd28f'), emissiveMap: emap, emissiveIntensity: 0, roughness: .55 });
+  nightMats.push([body, 1.1]);
+  return (liveries[k] = { body, nose: M('#f8f5f0', { roughness: .55 }), fin: M(tc, { roughness: .6 }), logo: new THREE.MeshStandardMaterial({ map: logoTexture(k), roughness: .6 }) });
+}
+const wingMat = M('#e9e4dc', { roughness: .65 }), engMat = M('#dad3c9', { roughness: .5, metalness: .15 });
+function makePlane(no) {
+  const L = livery(no), g = new THREE.Group(), body = new THREE.Group();
+  const add = (geo, m, x = 0, y = 0, z = 0, parent = body) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
+  add(PG.body, L.body); add(PG.nose, L.nose); add(PG.tail, L.nose); add(PG.tailCap, L.nose); add(PG.visor, mat.dark);
+  const wl = add(PG.wingL, wingMat, 0, -1.1), wr = add(PG.wingR, wingMat, 0, -1.1); wl.rotation.x = -.06; wr.rotation.x = .06;
+  [-1, 1].forEach(s => { const w = add(PG.winglet, wingMat, -8.1, .1, 17.2 * s); w.rotation.x = -.25 * s; });
+  add(PG.stabL, wingMat, 0, .9); add(PG.stabR, wingMat, 0, .9); add(PG.fin, L.fin);
+  [-1, 1].forEach(s => { const lg = add(PG.logo, L.logo, -19.2, 5.4, .23 * s); lg.rotation.y = s < 0 ? Math.PI : 0; });
+  [-1, 1].forEach(s => { add(PG.eng, engMat, .8, -2.6, 6.2 * s); add(PG.intake, mat.dark, 3.05, -2.6, 6.2 * s); add(PG.pylon, wingMat, -.3, -1.7, 6.2 * s); });
+  const gear = new THREE.Group(); body.add(gear);
+  [[14.2, 0], [-1.2, 2.6], [-1.2, -2.6]].forEach(([x, z]) => { add(PG.strut, mat.steel, x, -2.6, z, gear); add(PG.wheel, mat.tyre, x, -3.15, z, gear); });
+  body.position.y = 3.7; g.add(body); g.userData.gear = gear; g.userData.body = body;
+  return g;
+}
+const NOSE = 19.6;       // fuselage centre to nose tip
+
+// ---------- tugs, dollies, pushback tractors ----------
+const TG = { chassis: new THREE.BoxGeometry(3.6, 1.1, 2), cab: new THREE.BoxGeometry(1.5, 1.6, 1.8), roof: new THREE.BoxGeometry(1.9, .18, 2.1),
+  wheel: (() => { const w = new THREE.CylinderGeometry(.48, .48, .4, 12); w.rotateX(Math.PI / 2); return w; })(), beacon: new THREE.SphereGeometry(.32, 10, 8),
+  bed: new THREE.BoxGeometry(2.7, .32, 2.3), bar: new THREE.BoxGeometry(1.4, .14, .14), push: new THREE.BoxGeometry(5.4, 1.5, 3) };
+function makeTug(color) {
+  const g = new THREE.Group(), bodyM = M(color, { roughness: .6 }), beaconM = new THREE.MeshStandardMaterial({ color, emissive: new THREE.Color(color), emissiveIntensity: .9 });
+  const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
+  add(TG.chassis, bodyM, .2, 1.05, 0); add(TG.cab, mat.clay, -.9, 2.4, 0); add(TG.roof, mat.dark, -.9, 3.25, 0); add(TG.beacon, beaconM, -.9, 3.6, 0);
+  [[1.3, 1], [1.3, -1], [-1.1, 1], [-1.1, -1]].forEach(([x, z]) => add(TG.wheel, mat.tyre, x, .48, z));
+  g.scale.setScalar(1.6); g.userData.bodyM = bodyM; g.userData.beaconM = beaconM; return g;
+}
+function makePushback() {
+  const g = new THREE.Group(), add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
+  add(TG.push, M('#f4efe8'), 0, 1.25, 0); add(new THREE.BoxGeometry(5.5, .35, 3.1), mat.accent, 0, 2.1, 0); add(TG.cab, mat.dark, -1.4, 2.6, 0);
+  [[1.8, 1.3], [1.8, -1.3], [-1.8, 1.3], [-1.8, -1.3]].forEach(([x, z]) => add(TG.wheel, mat.tyre, x, .5, z));
+  return g;
+}
+// ULDs as instanced meshes: full (orange), empty (off-white), plus urgent tags; dollies too
+const uldGeo = (() => { const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(2, 0); s.lineTo(2, 2); s.lineTo(.6, 2); s.lineTo(0, 1.35); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: 1.9, bevelEnabled: false }); g.translate(-1, 0, -.95); return g; })();
+const CAPU = 1800;
+const uFull = new THREE.InstancedMesh(uldGeo, mat.uldFull, CAPU), uEmpty = new THREE.InstancedMesh(uldGeo, mat.uldEmpty, CAPU);
+const uTag = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.7, 0), mat.red, 400);
+const dollies = new THREE.InstancedMesh(TG.bed, mat.dolly, 300);
+[uFull, uEmpty, dollies].forEach(m => { m.castShadow = true; m.receiveShadow = true; m.count = 0; m.frustumCulled = false; scene.add(m); });
+uTag.count = 0; uTag.frustumCulled = false; scene.add(uTag);
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _e = new THREE.Euler();
+const US = 1.45;   // ULD and dolly scale (toy look)
+function setInst(im, n, x, y, z, yaw = 0, sc = US) { _q.setFromEuler(_e.set(0, yaw, 0)); _s.set(sc, sc, sc); _m.compose(_v.set(x, z, y), _q, _s); im.setMatrixAt(n, _m); }
+
+// pile slots (3D spacing) at banks, can stores and stands
+function slot(l, i) {
+  if (l.type === 'Chute') { const c = i % 4, r = Math.floor(i / 4) % 3, k = Math.floor(i / 12); return [HALL.x1 + 6 + c * 3.8, l.y - 4 + r * 3.7, k * 2.95]; }
+  if (l.yard) { const y = l.yard, c = i % 12, r = Math.floor(i / 12) % 10, k = Math.floor(i / 120); return [y.x0 + 8 + c * 4.6, y.y0 + 8 + r * 4.2, k * 2.95]; }
+  const F = standFrame(l), [x, y] = F(22 + (i >= 8 ? 4 : 0), 5 + (i % 8) * 3.9);
+  return [x, y, i >= 16 ? 2.95 : 0];
+}
+const CAP = l => l.type === 'Chute' ? 24 : l.yard ? 240 : 24;
+
+// ---------- selection ring ----------
+const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.25, 48), new THREE.MeshBasicMaterial({ color: '#ff6a1a', transparent: true, opacity: .9, depthWrite: false }));
+ring.rotation.x = -Math.PI / 2; ring.visible = false; scene.add(ring);
+const ring2 = ring.clone(); ring2.material = ring.material.clone(); scene.add(ring2);
+
+// pick targets for stands and banks
+const pickables = [];
+const pickMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+allStands.forEach(l => {
+  if (!l.nose) return;
+  const F = standFrame(l), [cx, cy] = F(0, 22), m = new THREE.Mesh(new THREE.BoxGeometry(42, 2, 46), pickMat);
+  m.position.set(cx, 1, cy); m.rotation.y = Math.atan2(-l.h[1], l.h[0]) + Math.PI / 2; m.userData.pick = { kind: 'stand', id: l.id }; scene.add(m); pickables.push(m);
+});
+hall.forEach(l => {
+  const m = l.yard ? new THREE.Mesh(new THREE.BoxGeometry(l.yard.x1 - l.yard.x0, 4, l.yard.y1 - l.yard.y0), pickMat) : new THREE.Mesh(new THREE.BoxGeometry(24, 14, 30), pickMat);
+  if (l.yard) m.position.set((l.yard.x0 + l.yard.x1) / 2, 2, (l.yard.y0 + l.yard.y1) / 2); else m.position.set(HALL.x1 + 10, 7, l.y);
+  m.userData.pick = { kind: 'bank', id: l.id }; scene.add(m); pickables.push(m);
+});
+
+// rain: streaks around the camera target, shown only when a real report has rain
+const RAIN_N = 2600, rainGeo = new THREE.BufferGeometry(), rainPos = new Float32Array(RAIN_N * 6);
+rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: '#7c93b8', transparent: true, opacity: .5 }));
+rain.frustumCulled = false; rain.visible = false; scene.add(rain);
+const rainSeed = Float32Array.from({ length: RAIN_N * 3 }, (_, i) => ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1);
+// windsock by the hall road: points downwind
+const sock = new THREE.Group();
+{
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, 9, 6), mat.steel); pole.position.y = 4.5; sock.add(pole);
+  const cone = new THREE.Mesh(new THREE.CylinderGeometry(.9, .45, 4.5, 10, 1, true), new THREE.MeshStandardMaterial({ color: '#ff6a1a', side: THREE.DoubleSide, roughness: .7 }));
+  cone.geometry.rotateZ(-Math.PI / 2); cone.geometry.translate(2.25, 0, 0); cone.position.y = 8.6; sock.add(cone); sock.userData.cone = cone;
+  sock.position.set(800, 0, 250); world.add(sock);
+}
+
+// ---------- camera: pan, rotate, zoom, glide ----------
+const cam = { tx: 900, tz: 420, dist: 1500, az: .72, el: .78 };
+const goal = { ...cam };
+let follow = null, userMoved = false;
+function applyCamera() {
+  const ce = Math.cos(cam.el);
+  camera.position.set(cam.tx + Math.sin(cam.az) * ce * cam.dist, Math.sin(cam.el) * cam.dist, cam.tz + Math.cos(cam.az) * ce * cam.dist);
+  camera.lookAt(cam.tx, 0, cam.tz);
+  // keep the sun's shadow box around what we look at, sized to the view
+  const half = clamp(cam.dist * .55, 90, 900);
+  const sc = sun.shadow.camera; sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.near = 10; sc.far = 3000; sc.updateProjectionMatrix();
+  sun.target.position.set(cam.tx, 0, cam.tz);
+}
+function frameBox(pts, opt = {}) {
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+  goal.tx = (Math.min(...xs) + Math.max(...xs)) / 2; goal.tz = (Math.min(...ys) + Math.max(...ys)) / 2 + (opt.dz || 0);
+  const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
+  goal.dist = clamp(Math.max(w / Math.min(aspect, 2) * 1.25, h * 1.6, opt.min || 160) * (opt.k || 1.15), 60, 4200);
+  if (opt.az != null) goal.az = opt.az; if (opt.el != null) goal.el = opt.el;
+}
+const AREAS = [
+  ['hall', 'Baggage hall', () => frameBox([[HALL.x0, HALL.y0], [880, HALL.y1 + 120], [880, HALL.y0 - 40]], { min: 260, k: 1 })],
+  ['t2a', 'T2A', () => frameBox(stands.filter(l => l.nose && l.x < 990).map(l => l.nose).concat([[600, 600]]), { min: 380 })],
+  ['t2b', 'T2B pier', () => frameBox(stands.filter(l => l.nose && l.x >= 990).map(l => l.nose).concat([[1100, 300], [1100, 600]]), { min: 420 })],
+  ['rwy', 'Runway', () => frameBox([[RWY.x0 + 300, RWY.y], [RWY.x1 - 300, RWY.y]], { min: 900, k: .8, el: .55 })],
+  ['all', 'Overview', () => frameBox(stands.filter(l => l.nose).map(l => l.nose).concat([[HALL.x0, HALL.y0], [HALL.x1, HALL.y1]]), { k: 1.05 })],
+];
+let area = 'all';
+function goArea(k) { area = k; follow = null; AREAS.find(a => a[0] === k)[2](); syncAreas(); }
+function syncAreas() { $('areas').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.a === area))); $('areaSel').value = area; }
+$('areas').innerHTML = AREAS.map(([k, n]) => `<button type="button" data-a="${k}">${n}</button>`).join('');
+$('areas').querySelectorAll('button').forEach(b => b.onclick = () => goArea(b.dataset.a));
+$('areaSel').innerHTML = AREAS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
+$('areaSel').onchange = e => goArea(e.target.value);
+
+// pointer: left drag pans, right drag (or two fingers) rotates, wheel or pinch zooms; a click selects
+const ptrs = new Map(); let dragInfo = null;
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  dragInfo = { x: e.clientX, y: e.clientY, moved: false, rot: e.button === 2 || e.shiftKey || e.ctrlKey };
+});
+canvas.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) { hoverAt(e); return; }
+  const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2) {        // pinch zoom and twist
+    const [a, b] = [...ptrs.values()], other = [...ptrs.entries()].find(([id]) => id !== e.pointerId)[1];
+    const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(a.x - b.x, a.y - b.y);
+    const a0 = Math.atan2(prev.y - other.y, prev.x - other.x), a1 = Math.atan2(e.clientY - other.y, e.clientX - other.x);
+    goal.dist = cam.dist = clamp(cam.dist * d0 / Math.max(1, d1), 60, 4200); goal.az = cam.az -= (a1 - a0); dragInfo && (dragInfo.moved = true); userMoved = true; return;
+  }
+  if (!dragInfo) return;
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+  if (Math.hypot(e.clientX - dragInfo.x, e.clientY - dragInfo.y) > 4) { dragInfo.moved = true; canvas.classList.add('drag'); }
+  if (!dragInfo.moved) return;
+  userMoved = true;
+  if (dragInfo.rot) { cam.az -= dx * .005; cam.el = clamp(cam.el + dy * .004, .32, 1.35); goal.az = cam.az; goal.el = cam.el; }
+  else {
+    follow = null;
+    const k = cam.dist * .0011 * (60 / Math.max(30, canvas.clientHeight / 12));
+    const sx = Math.cos(cam.az), sz = -Math.sin(cam.az), fx = -Math.sin(cam.az), fz = -Math.cos(cam.az);
+    cam.tx -= (dx * sx - dy * fx / Math.max(.4, Math.sin(cam.el))) * k; cam.tz -= (dx * sz - dy * fz / Math.max(.4, Math.sin(cam.el))) * k;
+    goal.tx = cam.tx; goal.tz = cam.tz;
+  }
+});
+canvas.addEventListener('pointerup', e => {
+  ptrs.delete(e.pointerId); canvas.classList.remove('drag');
+  if (dragInfo && !dragInfo.moved && ptrs.size === 0) pickAt(e);
+  if (ptrs.size === 0) dragInfo = null;
+});
+canvas.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); dragInfo = null; });
+canvas.addEventListener('wheel', e => { e.preventDefault(); goal.dist = clamp(goal.dist * Math.pow(1.0015, e.deltaY), 60, 4200); userMoved = true; }, { passive: false });
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function hitAt(e) {
+  const r = canvas.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const objs = pickables.concat([...planeObjs.values()].map(p => p.g), [...tugObjs.values()]);
+  for (const h of ray.intersectObjects(objs, true)) { let o = h.object; while (o && !o.userData.pick) o = o.parent; if (o) return o.userData.pick; }
+  return null;
+}
+let hoverT = 0;
+function hoverAt(e) { const n = performance.now(); if (n - hoverT < 60) return; hoverT = n; canvas.classList.toggle('hover', !!hitAt(e)); }
+function pickAt(e) { const p = hitAt(e); if (p) select(p.kind, p.id, true); }
+
+// ---------- selection ----------
+let sel = null;
+function select(kind, id, glide) {
+  sel = { kind, id }; follow = null;
+  if (glide) { const p = posOf(sel); if (p) { goal.tx = p.x; goal.tz = p.y; goal.dist = kind === 'stand' || kind === 'flight' ? 190 : kind === 'bank' ? 150 : 110; if (kind === 'tug' || kind === 'flight') follow = sel; } }
+  renderPanels(T, lastRes, true);
+}
+function posOf(s) {
+  if (!s) return null;
+  if (s.kind === 'tug') { const d = drvById[s.id]; return d?._p ? { x: d._p.x, y: d._p.y, z: 4, r: 6 } : null; }
+  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[f.stand]; if (l?.nose) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
+  const l = byId[s.id]; if (!l) return null;
+  if (s.kind === 'stand' && l.nose) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 26 }; }
+  if (l.yard) return { x: (l.yard.x0 + l.yard.x1) / 2, y: (l.yard.y0 + l.yard.y1) / 2, z: 6, r: 40 };
+  if (l.type === 'Chute') return { x: HALL.x1 + 10, y: l.y, z: 10, r: 14 };
+  return l.x != null ? { x: l.x, y: l.y, z: 4, r: 12 } : null;
+}
+
+// ---------- labels (HTML, collision-aware) ----------
+const labelBox = $('labels'), labelEls = new Map();
+let labelReq = [];
+const label = (key, x, y, z, html, cls = '', prio = 5) => labelReq.push({ key, x, y, z, html, cls, prio });
+const _p = new THREE.Vector3();
+function flushLabels() {
+  const W = canvas.clientWidth, H = canvas.clientHeight, placed = [], seen = new Set();
+  labelReq.sort((a, b) => a.prio - b.prio);
+  for (const L of labelReq) {
+    _p.set(L.x, L.z, L.y).project(camera);
+    if (_p.z > 1 || _p.x < -1.1 || _p.x > 1.1 || _p.y < -1.1 || _p.y > 1.1) continue;
+    const sx = (_p.x + 1) / 2 * W, sy = (1 - _p.y) / 2 * H;
+    let el = labelEls.get(L.key);
+    if (!el) { el = document.createElement('div'); labelBox.append(el); labelEls.set(L.key, el); el._w = 0; }
+    if (el._html !== L.html) { el.innerHTML = L.html; el._html = L.html; el._w = 0; }
+    if (el.className !== 'lb ' + L.cls) el.className = 'lb ' + L.cls;
+    if (!el._w) { el.style.display = ''; el._w = el.offsetWidth; el._h = el.offsetHeight; }
+    const x0 = sx - el._w / 2, y0 = sy - el._h - 6;
+    if (L.prio > 0 && placed.some(([a, b, w, h]) => x0 < a + w + 3 && x0 + el._w + 3 > a && y0 < b + h + 2 && y0 + el._h + 2 > b)) continue;
+    placed.push([x0, y0, el._w, el._h]); seen.add(L.key);
+    el.style.transform = `translate(${x0.toFixed(1)}px, ${y0.toFixed(1)}px)`; el.style.display = '';
+  }
+  labelEls.forEach((el, k) => { if (!seen.has(k)) el.style.display = 'none'; });
+  labelReq = [];
+}
+
+// ---------- per-frame scene update ----------
+const planeObjs = new Map(), tugObjs = new Map(), pushObjs = new Map();
+let dnMode = store.get('flow-dn', 'auto');   // auto follows the real sun
+const _c = new THREE.Color();
+function updateWorld(T, res, dt) {
+  const w = wxAt(T);
+  // light: real sunrise/sunset unless overridden
+  const light = dnMode === 'day' ? 1 : dnMode === 'night' ? 0 : (w ? w.light : 1), night = 1 - light, cloud = (w?.cloud ?? 0) / 100;
+  scene.background.copy(DAYSKY).lerp(NIGHTSKY, night); scene.fog.color.copy(scene.background);
+  sun.intensity = (.78 - .28 * cloud) * light + .1 * night; sun.color.set(night > .5 ? '#9fb3ff' : '#fff1df');
+  hemi.intensity = .1 + .36 * light; ambient.intensity = .04 + .06 * night;
+  hemi.color.set('#fff2e2').lerp(_c.set('#7d8cc4'), night);
+  const sa = cam.az + 1.9; sun.position.set(cam.tx + Math.sin(sa) * 700, 650, cam.tz + Math.cos(sa) * 700);   // from the side so shadows show
+  nightMats.forEach(([m, k]) => m.emissiveIntensity = k * night);
+  poolMat.opacity = .5 * night;
+  const vis = w?.vis ?? 9999;
+  scene.fog.near = vis < 5000 ? 80 : 2200 + cam.dist * .4; scene.fog.far = vis < 5000 ? 200 + vis * .9 : 6000 + cam.dist * 1.5;
+  groundMat.roughness = w?.wet ? .45 : .9; mat.grass.color.set(w?.wet ? '#a9b78d' : '#b9c79c');
+  // rain
+  rain.visible = !!(w && w.rate > 0) && !reduced;
+  if (rain.visible) {
+    const now = performance.now() / 1000, n = Math.round(RAIN_N * (.35 + .65 * w.rate)), span = clamp(cam.dist * .9, 200, 1400);
+    for (let i = 0; i < RAIN_N; i++) {
+      const o = i * 6;
+      if (i >= n) { rainPos.fill(0, o, o + 6); continue; }
+      const x = cam.tx + (rainSeed[i * 3] - .5) * span * 2, z = cam.tz + (rainSeed[i * 3 + 1] - .5) * span * 2;
+      const y = ((rainSeed[i * 3 + 2] * 300 - now * 140) % 300 + 300) % 300;
+      rainPos[o] = x; rainPos[o + 1] = y; rainPos[o + 2] = z; rainPos[o + 3] = x - 1.5; rainPos[o + 4] = y + 9; rainPos[o + 5] = z;
+    }
+    rainGeo.attributes.position.needsUpdate = true;
+  }
+  // windsock
+  if (w) { const to = ((w.dir ?? 0) + 180) * Math.PI / 180, f = clamp((w.kt ?? 0) / 15, .15, 1); sock.userData.cone.rotation.set(0, Math.atan2(Math.cos(to), Math.sin(to)), -(1 - f) * 1.1); }
+
+  if (groundDirty) { paintGround(new Set(stands.map(l => l.id))); groundDirty = false; }
+
+  // aircraft (only flights shown for this organisation)
+  const live = new Set();
+  D.flights.forEach(f => {
+    if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
+    const out = f.etd || f.std; if (!out) return;
+    const inn = f.sta || out - 150 * 60;
+    if (T < inn - 1800 || T > out + 1800) return;
+    const pl = flightPlan(f); if (!pl) return;
+    const ps = planePose(pl, T); if (!ps) return;
+    if (ps.phase === 'On stand' && res.planeAt.get(pl.l.id) && res.planeAt.get(pl.l.id).id !== f.id) return;   // one plane per stand, as in the data views
+    live.add(f.id);
+    let P = planeObjs.get(f.id);
+    if (!P) { const g = makePlane(f.no); g.userData.pick = { kind: 'flight', id: f.id }; scene.add(g); P = { g, f }; planeObjs.set(f.id, P); }
+    const fwdx = Math.cos(ps.yaw), fwdy = -Math.sin(ps.yaw);
+    P.g.position.set(ps.x - fwdx * NOSE, ps.z, ps.y - fwdy * NOSE); P.g.rotation.set(0, ps.yaw, 0);
+    P.g.userData.body.rotation.z = ps.pitch || 0;
+    P.g.userData.gear.scale.y = Math.max(.01, ps.gear); P.g.userData.gear.visible = ps.gear > .02;
+    P.ps = ps; P.pl = pl; P.g.visible = true;
+    // pushback tractor: drives in before departure, pushes, then returns to its bay
+    let tug = pushObjs.get(f.id);
+    const showTug = T > pl.out - 90 && T < pl.tPushEnd + 45;
+    if (showTug && !tug) { tug = makePushback(); scene.add(tug); pushObjs.set(f.id, tug); }
+    if (tug) {
+      tug.visible = showTug;
+      if (showTug) {
+        const hy = Math.atan2(-pl.l.h[1], pl.l.h[0]), F = standFrame(pl.l), bay = F(-24, -6), front = F(0, -4);
+        let x, y, yaw;
+        if (T < pl.out) { const k = ease(clamp((T - pl.out + 90) / 60, 0, 1)); x = lerp(bay[0], front[0], k); y = lerp(bay[1], front[1], k); yaw = hy + Math.PI; }
+        else if (T < pl.tPushEnd) { x = ps.x + fwdx * 3.5; y = ps.y + fwdy * 3.5; yaw = ps.yaw + Math.PI; }
+        else { const k = ease(clamp((T - pl.tPushEnd) / 45, 0, 1)), sx = ps.x + fwdx * 3.5, sy = ps.y + fwdy * 3.5; x = lerp(sx, bay[0], k); y = lerp(sy, bay[1], k); yaw = Math.atan2(-(bay[1] - sy), bay[0] - sx); }
+        tug.position.set(x, 0, y); tug.rotation.y = yaw;
+      }
+    }
+  });
+  planeObjs.forEach((P, id) => { if (!live.has(id)) { P.g.visible = false; P.ps = null; } });
+  pushObjs.forEach((t, id) => { if (!live.has(id)) t.visible = false; });
+  // jet bridges dock while a plane is on stand
+  bridges.forEach((b, id) => {
+    const f = res.planeAt.get(id), P = f && planeObjs.get(f.id);
+    const want = P && P.ps && P.ps.phase === 'On stand' && T > P.pl.inn + 40 && T < P.pl.out - 60 ? 1 : 0;
+    b.ext += (want - b.ext) * clamp(dt * 1.5, 0, 1); if (Math.abs(want - b.ext) > .002) poseBridge(b, b.ext);
+  });
+
+  // ULD piles
+  let nf = 0, ne = 0, nt = 0, nd = 0;
+  const now = performance.now() / 1000;
+  const putULD = (t, x, y, z, yaw = 0) => {
+    if (t.full) { if (nf < CAPU) setInst(uFull, nf++, x, y, z, yaw); } else if (ne < CAPU) setInst(uEmpty, ne++, x, y, z, yaw);
+    if (t.ev && (isUrgent(t, T) || overdue(t, T)) && nt < 400) setInst(uTag, nt++, x, y, z + 4.4 + Math.sin(now * 4) * .3, now, 1.2);
+  };
+  res.piles.forEach((list, id) => {
+    const l = byId[id]; if (l.x == null) return;
+    const cap = CAP(l), yaw = l.nose ? Math.atan2(-l.h[1], l.h[0]) : 0;
+    list.slice(0, cap).forEach(([t], i) => { const [x, y, z] = slot(l, i); putULD(t, x, y, z, yaw); });
+    if (list.length > cap) { const [x, y] = slot(l, cap - 1); label('more' + id, x, y, 6, `+${list.length - cap}`, 'soft', 6); }
+  });
+  // tugs with their dolly trains
+  const seen = new Set();
+  res.states.forEach(({ d, st }) => {
+    if (!d._p) return;
+    seen.add(d.id);
+    let g = tugObjs.get(d.id);
+    const col = statusStyle(st)[3];
+    if (!g) { g = makeTug(col); g.userData.pick = { kind: 'tug', id: d.id }; scene.add(g); tugObjs.set(d.id, g); g.userData.yaw = Math.atan2(-d._p.dy, d._p.dx || 1e-6); }
+    g.visible = true;
+    if (g.userData.col !== col) { g.userData.col = col; g.userData.bodyM.color.set(col); g.userData.beaconM.color.set(col); g.userData.beaconM.emissive.set(col); }
+    const want = Math.atan2(-d._p.dy, (d._p.dx || (d._p.dy ? 0 : 1)));
+    let dy = want - g.userData.yaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI;
+    g.userData.yaw += dy * clamp(dt * 8, 0, 1);
+    g.position.set(d._p.x, 0, d._p.y); g.rotation.y = g.userData.yaw;
+    if (st.k === 'carry' || st.k === 'atdrop') {
+      st.o.tasks.filter(t => !(t.can && t.can <= T)).slice(0, 6).forEach((t, k) => {
+        let q;
+        if (d._path) { const p = pointAt(d._path, d._s - 7.6 - k * 4.8); q = { x: p.x, y: p.y, yaw: Math.atan2(-p.dy, p.dx || (p.dy ? 0 : 1)) }; }
+        else { const fx = Math.cos(g.userData.yaw), fy = -Math.sin(g.userData.yaw); q = { x: d._p.x - fx * (7.6 + k * 4.8), y: d._p.y - fy * (7.6 + k * 4.8), yaw: g.userData.yaw }; }
+        if (nd < 300) setInst(dollies, nd++, q.x, q.y, .8, q.yaw);
+        putULD(t, q.x, q.y, 1.05, q.yaw);
+      });
+    }
+    const urgentRun = st.o && st.k !== 'idle' && st.o.tasks.some(t => isUrgent(t, T));
+    const isSel = sel?.kind === 'tug' && sel.id === d.id;
+    const [txt] = statusStyle(st);
+    if (isSel) label('tug' + d.id, d._p.x, d._p.y, 7, `${esc(d.tag)} <em>${esc(txt)}</em>`, 'sel', 0);
+    else label('tug' + d.id, d._p.x, d._p.y, 7, urgentRun ? `${esc(d.tag)} <em>URGENT</em>` : `<span class="dot" style="background:${col}"></span>${esc(d.tag)}`, urgentRun ? 'urgent' : '', urgentRun ? 1 : 3);
+  });
+  tugObjs.forEach((g, id) => { if (!seen.has(id)) g.visible = false; });
+  uFull.count = nf; uEmpty.count = ne; uTag.count = nt; dollies.count = nd;
+  [uFull, uEmpty, uTag, dollies].forEach(m => m.instanceMatrix.needsUpdate = true);
+
+  // plane labels
+  planeObjs.forEach(P => {
+    if (!P.ps) return;
+    const f = P.f, left = Math.round(((f.etd || f.std) - T) / 60), isSel = sel?.kind === 'flight' && sel.id === f.id;
+    const tag = P.ps.phase === 'On stand' ? (left >= 0 ? `STD ${left}m` : 'Closing') : P.ps.phase;
+    label('fl' + f.id, P.g.position.x, P.g.position.z, P.g.position.y + 12, `${esc(f.no)} <em>${esc(tag)}</em>`, isSel ? 'sel' : 'soft', isSel ? 0 : 2);
+  });
+  // signs
+  chutes.forEach(l => label('bank' + l.id, HALL.x1 + 1, l.y, 17, esc(l.label), sel?.kind === 'bank' && sel.id === l.id ? 'sel' : 'sign', sel?.id === l.id ? 0 : 4));
+  yards.forEach(l => label('yard' + l.id, (l.yard.x0 + l.yard.x1) / 2, l.yard.y0, 3, esc(l.label), sel?.id === l.id ? 'sel' : 'sign', sel?.id === l.id ? 0 : 4));
+  label('hall', (HALL.x0 + HALL.x1) / 2, HALL.y0, 34, 'T1 BAGGAGE HALL', 'sel', 4);
+  if (sel?.kind === 'stand') { const l = byId[sel.id], [x, y] = standFrame(l)(0, 46); label('stand' + l.id, x, y, 2, `Stand ${esc(l.name)}`, 'sel', 0); }
+
+  // selection ring, pulsing
+  const p = posOf(sel);
+  ring.visible = ring2.visible = !!p;
+  if (p) {
+    const k = reduced ? .5 : (now * .9) % 1;
+    ring.position.set(p.x, .4, p.y); ring.scale.setScalar(p.r * (1 + k * .5)); ring.material.opacity = .9 * (1 - k);
+    ring2.position.set(p.x, .35, p.y); ring2.scale.setScalar(p.r); ring2.material.opacity = .9;
+    if (follow && follow.kind === sel.kind && follow.id === sel.id) { goal.tx = p.x; goal.tz = p.y; }
+  }
+}
+
+// ---------- panels ----------
+const ICON = {
+  tug: '<svg width="24" height="24" viewBox="0 0 30 30"><rect x="3" y="12" width="19" height="9" rx="2" fill="currentColor"/><rect x="14" y="6" width="8" height="8" rx="1.5" fill="currentColor" opacity=".55"/><circle cx="8" cy="22" r="3" fill="#2c2a31"/><circle cx="18" cy="22" r="3" fill="#2c2a31"/></svg>',
+  plane: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M10 2h2l1 7 7 4v2l-7-2-.6 4 2.6 2v1.5L11 19l-4 1.5V19l2.6-2L9 13l-7 2v-2l7-4z" fill="currentColor"/></svg>',
+  stand: '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="16" height="16" rx="3"/><path d="M11 3v16M7 6h8"/></svg>',
+  bank: '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M11 2 20 6.5v9L11 20 2 15.5v-9z" fill="currentColor"/><path d="M11 11v9l-9-4.5v-9z" fill="#000" opacity=".2"/></svg>',
+};
+const WXI = {
+  sun: '<svg width="17" height="17" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="4.5" fill="#ff6a1a"/><g stroke="#ff6a1a" stroke-width="2" stroke-linecap="round"><path d="M11 1.5v2.5M11 18v2.5M1.5 11H4M18 11h2.5M4.3 4.3l1.8 1.8M15.9 15.9l1.8 1.8M4.3 17.7l1.8-1.8M15.9 6.1l1.8-1.8"/></g></svg>',
+  moon: '<svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><path d="M15.5 14.5A7 7 0 0 1 8.2 3.6 7.5 7.5 0 1 0 18.6 13a7 7 0 0 1-3.1 1.5z" fill="#6d55d8"/></svg>',
+  cloud: '<svg width="17" height="17" viewBox="0 0 22 22" aria-hidden="true"><path d="M6.5 17.5a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.6 1.2 3.4 3.4 0 0 1-.2 6.8z" fill="#a99c90"/></svg>',
+  rain: '<svg width="17" height="17" viewBox="0 0 22 22" aria-hidden="true"><path d="M6.5 13a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.6 1.2 3.4 3.4 0 0 1-.2 6.8z" fill="#a99c90"/><path d="M8 15.5 7 19M12 15.5l-1 3.5M16 15.5l-1 3.5" stroke="#3767c9" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  auto: '<svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 3a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
+};
+let lastStats = null, lastRes = null, lastPanel = 0;
+function counts(T) {
+  const d0 = dayStart(T), d1 = d0 + 86400, r = { full: 0, empty: 0, runs: 0, fullDay: 0, emptyDay: 0, runsDay: 0, flights: new Set(), flDay: new Set(), late: 0, lateDay: 0, urgent: 0, escalated: 0, delivered: 0 };
+  D.tasks.forEach(t => {
+    if (!inOrg(t.company)) return;
+    if (escalated(t) && t.urgentAt >= d0 && t.urgentAt <= T) r.escalated++;
+    if (!t.del || t.del < d0 || t.del >= d1) return;
+    t.full ? r.fullDay++ : r.emptyDay++;
+    if (isLate(t)) r.lateDay++;
+    if (t.flight && flights[t.flight]) r.flDay.add(t.flight);
+    if (t.del > T) return;
+    t.full ? r.full++ : r.empty++;
+    r.delivered++;
+    if (isLate(t)) r.late++;
+    if (t.urgent) r.urgent++;
+    if (t.flight && flights[t.flight]) r.flights.add(t.flight);
+  });
+  orders.forEach(o => { if (o.d && o.d >= d0 && o.d < d1 && inOrg(o.company)) { r.runsDay++; if (o.d <= T) r.runs++; } });
+  return r;
+}
+function alertsAt(T) {
+  const out = [];
+  D.tasks.forEach(t => {
+    if (!inOrg(t.company) || T < t.ready || (t.del && t.del <= T) || (t.can && t.can <= T)) return;
+    if (overdue(t, T)) out.push({ t, kind: 'Overdue', mins: Math.round((T - t.due) / 60) });
+    else if (isUrgent(t, T)) out.push({ t, kind: 'Urgent', mins: t.due ? Math.round((t.due - T) / 60) : null });
+  });
+  const byOrder = new Map(); out.forEach(a => { const k = a.t.o.id; if (!byOrder.has(k) || a.kind === 'Overdue') byOrder.set(k, { ...a, n: (byOrder.get(k)?.n || 0) + 1 }); else byOrder.get(k).n++; });
+  return [...byOrder.values()].sort((a, b) => (b.kind === 'Overdue') - (a.kind === 'Overdue') || (b.mins ?? 0) - (a.mins ?? 0));
+}
+function renderPanels(T, res, force) {
+  if (!res) return;
+  const w = wxAt(T);
+  $('clock').innerHTML = `${fmtT(T)}<small>${fmtD(T)} · UTC</small>`;
+  const ds = String(Math.max(dayStart(T) + 5 * 3600, tMin)); if ($('day').value !== ds && [...$('day').options].some(o => o.value === ds)) $('day').value = ds;
+  const c = counts(T), prev = counts(Math.max(dayStart(T), T - 3600));
+  const onTime = c.delivered ? (100 * (c.delivered - c.late) / c.delivered) : 100;
+  const delta = (a, b) => a - b > 0 ? `<small>+${a - b} /h</small>` : '';
+  const tot = Math.max(1, c.fullDay + c.emptyDay);
+  $('kpis').innerHTML = `
+    <div class="kpi glass"><span class="l">ULDs delivered</span><span class="v">${c.full + c.empty}${delta(c.full + c.empty, prev.full + prev.empty)}</span>
+      <div class="split"><i style="width:${c.full / tot * 100}%;background:var(--accent)"></i><i style="width:${c.empty / tot * 100}%;background:var(--teal)"></i></div>
+      <span class="s">${c.full} full · ${c.empty} empty · of ${c.fullDay + c.emptyDay} today</span></div>
+    <div class="kpi glass"><span class="l">Flights served</span><span class="v">${c.flights.size}${delta(c.flights.size, prev.flights.size)}</span><span class="s">of ${c.flDay.size} today · ${c.runs} tug trips</span></div>
+    <div class="kpi glass"><span class="l">On-time delivery</span><span class="v" style="color:${onTime < 95 ? 'var(--alert)' : 'inherit'}">${onTime.toFixed(1)}%</span><span class="s">${c.late} late · ${c.urgent} urgent · ${c.escalated} escalated</span></div>`;
+  const inTransit = res.states.reduce((n, s) => n + (s.st.k === 'carry' || s.st.k === 'atdrop' ? s.st.o.tasks.filter(t => !(t.can && t.can <= T)).length : 0), 0);
+  lastStats = { full: c.full, empty: c.empty, runs: c.runs, flights: c.flights.size, urgent: c.urgent, escalated: c.escalated, late: c.late, waiting: res.waiting, inTransit,
+    moving: res.states.filter(s => s.st.k === 'carry' || s.st.k === 'dh').length, onShift: res.states.filter(s => s.st.k !== 'off').length };
+  // top bar: weather, alerts, day/night
+  const ic = !w ? WXI.cloud : w.wet ? WXI.rain : w.light < .5 ? WXI.moon : (w.cloud ?? 0) > 70 ? WXI.cloud : WXI.sun;
+  $('wxBtn').innerHTML = w ? `${ic}<span class="mono">${Math.round(w.temp)}°C</span>` : `${ic}<span>Weather</span>`;
+  const al = alertsAt(T);
+  $('alN').hidden = !al.length; $('alN').textContent = al.length;
+  $('dnBtn').innerHTML = { auto: `${WXI.auto}<span>Auto</span>`, day: `${WXI.sun}<span>Day</span>`, night: `${WXI.moon}<span>Night</span>` }[dnMode];
+  if (!$('wxPop').hidden) renderWx(T); if (!$('alPop').hidden) renderAlerts(T, al);
+  // default selection: the first tug doing something
+  if (!sel || (sel.kind === 'tug' && !inOrg(drvById[sel.id]?.company))) {
+    const s = res.states.find(s => !['off', 'idle'].includes(s.st.k)) || res.states.find(s => s.st.k !== 'off');
+    if (s) sel = { kind: 'tug', id: s.d.id };
+  }
+  renderDetail(T, res); renderTracker(T, res); renderTable(T, res);
+}
+function orderOf(d, st, T) { if (st.o && st.k !== 'off') return st.o; return d.orders.filter(o => o.a && o.a <= T).sort((a, b) => b.a - a.a)[0] || null; }
+const head = (icon, eye, name, sub, extra = '') => `<div class="dh"><span class="av">${icon}</span><div><div class="eye">${eye}</div><div class="dn">${name}</div><div class="ds">${sub}</div></div><div class="ibs">${extra}
+  <button class="ib" type="button" data-act="follow" aria-pressed="${!!(follow && follow.id === sel?.id)}" title="Follow with the camera"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="8" cy="8" r="4.5"/><path d="M8 1v2.5M8 12.5V15M1 8h2.5M12.5 8H15"/></svg></button>
+  <button class="ib" type="button" data-act="close" title="Clear selection"><svg width="13" height="13" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m3 3 8 8M11 3l-8 8"/></svg></button></div></div>`;
+function flightInfo(f, T) {
+  const ts = D.tasks.filter(t => t.flight === f.id && inOrg(t.company));
+  const del = ts.filter(t => t.del && t.del <= T), late = del.filter(isLate);
+  const P = planeObjs.get(f.id), out = f.etd || f.std, inn = f.sta || out - 150 * 60;
+  const phase = P?.ps?.phase || (T < inn ? 'Inbound' : T > out ? 'Departed' : 'On stand');
+  const tugs = [...new Set(ts.map(t => t.o.driver).filter(Boolean))].map(id => drvById[id]?.tag).filter(Boolean);
+  return { ts, del, late, phase, tugs, out, inn, full: del.filter(t => t.full).length, empty: del.filter(t => !t.full).length, urgent: ts.filter(t => isUrgent(t, T) && !(t.del && t.del <= T)).length };
+}
+function renderDetail(T, res) {
+  const el = $('detail');
+  if (!sel) { el.innerHTML = '<div class="ds">Click a tug, plane, stand or bank to see it here.</div>'; return wireDetail(); }
+  if (sel.kind === 'tug') {
+    const s = res.states.find(x => x.d.id === sel.id), d = drvById[sel.id];
+    const st = s ? s.st : { k: 'off' }, [txt, bg, fg] = statusStyle(st), o = orderOf(d, st, T), d0 = dayStart(T);
+    const done = d.orders.filter(x => x.d && x.d >= d0 && x.d <= T);
+    const carrying = (st.k === 'carry' || st.k === 'atdrop') ? st.o.tasks.filter(t => !(t.can && t.can <= T)) : [];
+    const urgent = st.o && !['idle', 'off'].includes(st.k) && st.o.tasks.some(t => isUrgent(t, T));
+    let prog = 0, ptxt = `${done.length} trips today`;
+    if ((st.k === 'dh' || st.k === 'carry') && st.t1 > st.t0) { prog = (T - st.t0) / (st.t1 - st.t0); ptxt = `${Math.round(prog * 100)}% of this leg`; }
+    else if (st.k === 'atpick' || st.k === 'atdrop') { prog = st.k === 'atdrop' ? 1 : 0; ptxt = st.k === 'atdrop' ? 'At drop-off' : 'At pickup'; }
+    else prog = Math.min(1, done.length / 12);
+    const what = o ? [o.nFull && `${o.nFull} full`, o.nEmpty && `${o.nEmpty} empty`].filter(Boolean).join(' + ') + ' ULD' : '—';
+    const action = o && !['idle', 'off'].includes(st.k) ? `${txt === 'Assigned' ? 'Holding' : txt} #${o.no} · ${o.from.label} → ${o.to.label}` : st.k === 'idle' ? `At ${(st.loc || st.o?.to)?.label ?? '—'}` : 'Not working right now';
+    const f = o?.flight, left = f ? Math.round(((f.etd || f.std) - T) / 60) : null;
+    el.innerHTML = head(`<span style="color:${statusStyle(st)[3]}">${ICON.tug}</span>`, `Baggage tug · ${esc(d.company || '')}`, esc(d.tag), `${esc(d.name)}`) + `
+      <div class="state">${pill(txt, bg, fg)}${urgent ? pill('URGENT', 'var(--alert)', '#fff') : ''}<span>${esc(action)}</span></div>
+      <div class="prog"><div class="bar"><i style="width:${Math.round(prog * 100)}%;background:${statusStyle(st)[3]}"></i></div><span>${esc(ptxt)}</span></div>
+      <div class="kv"><span>Carrying</span><strong>${carrying.length ? `${carrying.length} ${st.o.full ? 'full' : 'empty'} ULD${carrying.length > 1 ? 's' : ''}` : 'Nothing'}</strong>
+        <span>Order</span><strong>${o ? `#${esc(o.no)} · ${esc(what)}` : '—'}</strong>
+        <span>Route</span><strong>${o ? `${esc(o.from.label)} → ${esc(o.to.label)}` : '—'}</strong>
+        <span>Flight</span><strong>${f ? `<a href="#" data-fl="${f.id}" style="color:var(--accent-ink)">${esc(f.no)}</a>${left != null ? ` · ${left >= 0 ? 'STD in ' + left + ' min' : 'departed'}` : ''}` : '—'}</strong>
+        <span>Trips today</span><strong class="m">${done.length}</strong></div>`;
+  } else if (sel.kind === 'flight') {
+    const f = flights[sel.id], l = byId[f.stand], I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
+    const ph = { 'On stand': ['var(--ok-soft)', 'var(--ok)'], 'Pushback': ['var(--info-soft)', 'var(--info)'] }[I.phase] || ['var(--chip)', 'var(--muted)'];
+    el.innerHTML = head(`<span style="color:${TAILC[String(f.no).slice(0, 2)] || 'var(--accent)'}">${ICON.plane}</span>`, airlineOf(f.no), esc(f.no), `Stand ${esc(l?.name ?? '—')} · ${esc(f.status || 'Scheduled')}`) + `
+      <div class="state">${pill(I.phase, ph[0], ph[1])}${I.urgent ? pill(`${I.urgent} urgent`, 'var(--alert)', '#fff') : ''}<span>${left >= 0 ? `Departs in ${left} min` : `Departed ${-left} min ago`}</span></div>
+      <div class="kv"><span>On stand</span><strong class="m">${f.sta ? fmtT(f.sta) : `~${fmtT(I.inn)}`}</strong>
+        <span>Departure</span><strong class="m">${fmtT(I.out)}${f.etd && f.std && f.etd !== f.std ? ` (STD ${fmtT(f.std)})` : ''}</strong>
+        <span>ULDs delivered</span><strong>${I.full} full · ${I.empty} empty</strong>
+        <span>Late ULDs</span><strong style="color:${I.late.length ? 'var(--alert)' : 'inherit'}">${I.late.length}</strong>
+        <span>Tugs on it</span><strong>${I.tugs.length ? esc(I.tugs.join(', ')) : '—'}</strong>
+        <span>Handled by</span><strong>${esc([...(flightOrgs.get(f.id) || [])].join(', ') || '—')}</strong></div>
+      <div class="note">Stand times and ULD movements are from the data. Landing, taxi and take-off are drawn to show the flow, on the runway the real wind favoured.</div>`;
+  } else {
+    const l = byId[sel.id], pile = { full: 0, empty: 0 }; (res.piles.get(l.id) || []).forEach(([t]) => t.full ? pile.full++ : pile.empty++);
+    const f = res.planeAt.get(l.id);
+    const recent = [...orders.values()].filter(o => (o.from === l || o.to === l) && o.d && o.d <= T && o.d > T - 3 * 3600 && inOrg(o.company)).length;
+    const next = D.flights.filter(x => x.stand === l.id && (x.etd || x.std) > T && (org === 'all' || flightOrgs.get(x.id)?.has(org))).sort((a, b) => (a.etd || a.std) - (b.etd || b.std))[0];
+    const kind = sel.kind === 'stand' ? 'Stand' : l.type === 'Chute' ? 'Baggage bank' : 'Can store';
+    el.innerHTML = head(`<span>${sel.kind === 'stand' ? ICON.stand : ICON.bank}</span>`, kind, esc(sel.kind === 'stand' ? l.name : l.label), sel.kind === 'stand' ? 'Terminal 2 apron' : 'T1 baggage hall') + `
+      <div class="state">${f ? pill(`${f.no} on stand`, 'var(--ok-soft)', 'var(--ok)') : sel.kind === 'stand' ? pill('No aircraft', 'var(--chip)', 'var(--muted)') : pile.full ? pill(`${pile.full} full waiting`, 'var(--accent-soft)', 'var(--accent-ink)') : pill('Quiet', 'var(--chip)', 'var(--muted)')}</div>
+      <div class="kv"><span>Full ULDs here</span><strong class="m">${pile.full}</strong><span>Empty ULDs here</span><strong class="m">${pile.empty}</strong>
+        <span>Runs in the last 3 h</span><strong class="m">${recent}</strong>
+        ${sel.kind === 'stand' ? `<span>Next departure</span><strong>${next ? `<a href="#" data-fl="${next.id}" style="color:var(--accent-ink)">${esc(next.no)}</a> · ${fmtT(next.etd || next.std)}` : '—'}</strong>` : ''}</div>`;
+  }
+  wireDetail();
+}
+function wireDetail() {
+  ['detail', 'sDetail'].forEach(id => $(id).querySelectorAll('[data-act],[data-fl]').forEach(b => b.onclick = e => {
+    e.preventDefault();
+    if (b.dataset.fl) return select('flight', b.dataset.fl, true);
+    if (b.dataset.act === 'close') { sel = null; follow = null; renderPanels(T, lastRes, true); }
+    if (b.dataset.act === 'follow') { follow = follow && follow.id === sel?.id ? null : sel; const p = posOf(sel); if (follow && p) { goal.tx = p.x; goal.tz = p.y; goal.dist = Math.min(goal.dist, 200); } renderPanels(T, lastRes, true); }
+  }));
+}
+const STEPI = {
+  doc: '<path d="M5 3h6l3 3v9H5z" fill="none" stroke="currentColor" stroke-width="1.6"/>', ok: '<path d="m4 9 3 3 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  box: '<path d="M3 6.5 9 3l6 3.5v6L9 16l-6-3.5z" fill="none" stroke="currentColor" stroke-width="1.6"/>', go: '<path d="M3 9h10m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  x: '<path d="m5 5 8 8M13 5l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>', plane: '<path d="M8 2h2l1 5 5 3v1.5l-5-1.5-.4 3 2 1.5v1L9 15l-3.6 1v-1l2-1.5L7 10l-5 1.5V10l5-3z" fill="currentColor"/>',
+  stand: '<path d="M3 15h12M9 3v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+};
+function steps(list, T, bad) {
+  let reached = -1; list.forEach(([, t], i) => { if (t && t <= T) reached = i; });
+  const n = list.length;
+  $('steps').style.setProperty('--n', n);
+  return `<span class="fill" style="width:${Math.max(0, reached) / n * 100}%"></span>` + list.map(([name, t, ic], i) => {
+    const cls = i < reached || (i === reached && i === n - 1) ? (bad && i === n - 1 ? 'bad' : 'done') : i === reached ? 'now' : '';
+    return `<div class="step ${cls}"><i><svg width="16" height="16" viewBox="0 0 18 18">${ic}</svg></i><b>${name}</b><small>${t && t <= T ? fmtT(t) : t ? '~' + fmtT(t) : '—'}</small></div>`;
+  }).join('');
+}
+function renderTracker(T, res) {
+  let f = null, o = null;
+  if (sel?.kind === 'flight') f = flights[sel.id];
+  else if (sel?.kind === 'stand') f = res.planeAt.get(sel.id) || null;
+  else if (sel?.kind === 'tug') { const s = res.states.find(x => x.d.id === sel.id); o = s ? orderOf(s.d, s.st, T) : null; }
+  if (f) {
+    const I = flightInfo(f, T), dels = I.ts.filter(t => t.del).map(t => t.del).sort((a, b) => a - b);
+    $('trkTitle').textContent = `Turnaround · ${f.no}`;
+    $('trkHead').textContent = `stand ${byId[f.stand]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
+    $('steps').innerHTML = steps([['On stand', I.inn, STEPI.stand], ['First ULD', dels[0], STEPI.box], ['Last ULD', dels[dels.length - 1], STEPI.ok], ['Pushback', I.out, STEPI.go]], T, false);
+    const pending = I.ts.filter(t => !(t.del && t.del <= T) && !(t.can && t.can <= T)).length;
+    $('tsum').innerHTML = `<span><b>${I.del.length}</b> of ${I.ts.length} ULDs delivered</span><span><b>${pending}</b> still to come</span><span style="color:${I.late.length ? 'var(--alert)' : 'inherit'}"><b>${I.late.length}</b> late</span><span>${I.phase}</span>`;
+  } else if (o) {
+    const cancelled = o.x && o.x <= T && !(o.d && o.d <= T), late = o.tasks.filter(isLate).length;
+    $('trkTitle').textContent = `Order #${o.no}`;
+    $('trkHead').textContent = `${o.company || ''} · ${drvById[o.driver]?.tag || ''}`;
+    $('steps').innerHTML = steps([['Created', o.ready, STEPI.doc], ['Accepted', o.a, STEPI.ok], ['Collected', o.c, STEPI.box], [cancelled ? 'Cancelled' : 'Delivered', cancelled ? o.x : o.d, cancelled ? STEPI.x : STEPI.go]], T, cancelled);
+    const due = Math.min(...o.tasks.map(t => t.due || Infinity));
+    const dueTxt = isFinite(due) ? (o.d && o.d <= T ? (late ? `${late} late` : 'on time') : due > T ? `due ${fmtT(due)} · ${Math.round((due - T) / 60)} min left` : `overdue since ${fmtT(due)}`) : '';
+    $('tsum').innerHTML = `<span><b>${o.nFull ? o.nFull + ' full' : ''}${o.nFull && o.nEmpty ? ' + ' : ''}${o.nEmpty ? o.nEmpty + ' empty' : ''}</b> ULD</span><span>${esc(o.from.label)} → ${esc(o.to.label)}</span>${o.flight ? `<span>${esc(o.flight.no)}</span>` : ''}<span>${esc(dueTxt)}</span>`;
+  } else {
+    $('trkTitle').textContent = 'Turnaround'; $('trkHead').textContent = '';
+    $('steps').innerHTML = '<div class="ds" style="grid-column:1/-1">Select a flight, stand or tug to follow its turnaround or order.</div>'; $('tsum').innerHTML = '';
+  }
+}
+let tab = store.get('flow-tab', 'stands');
+function renderTable(T, res) {
+  const busy = res.states.filter(s => !['off', 'idle'].includes(s.st.k)).length;
+  const flightsToday = D.flights.filter(f => { const out = f.etd || f.std; return out && out >= T - 1800 && out < dayStart(T) + 86400 && byId[f.stand]?.nose && (org === 'all' || flightOrgs.get(f.id)?.has(org)); }).sort((a, b) => (a.etd || a.std) - (b.etd || b.std));
+  $('tabs').innerHTML = [['stands', 'Stands', res.planeAt.size + '/' + stands.length], ['tugs', 'Tugs', `${busy}/${res.states.length}`], ['flights', 'Flights', flightsToday.length]]
+    .map(([k, n, c]) => `<button type="button" role="tab" data-t="${k}" aria-selected="${tab === k}">${n}<em>${c}</em></button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => { tab = b.dataset.t; store.set('flow-tab', tab); renderPanels(T, lastRes, true); });
+  let html = '';
+  if (tab === 'tugs') {
+    const d0 = dayStart(T);
+    html = res.states.map(({ d, st }) => {
+      const [txt, bg, fg] = statusStyle(st), o = st.o;
+      const what = o && !['idle', 'off'].includes(st.k) ? `#${o.no} ${o.from.label} → ${o.to.label}` : st.k === 'idle' ? `At ${(st.loc || st.o?.to)?.label ?? '—'}` : 'Off shift';
+      const trips = d.orders.filter(x => x.d && x.d >= d0 && x.d <= T).length;
+      return `<button type="button" class="row ${sel?.id === d.id ? 'sel' : ''} ${st.k === 'off' ? 'off' : ''}" data-k="tug" data-id="${d.id}"><span class="id">${esc(d.tag)}<small>${esc(d.company || '')}</small></span><span class="w">${esc(what)}</span>${pill(txt, bg, fg)}<span class="n">${trips} trips</span></button>`;
+    }).join('');
+  } else if (tab === 'stands') {
+    html = stands.filter(l => l.nose).map(l => {
+      const f = res.planeAt.get(l.id), p = { full: 0, empty: 0 }; (res.piles.get(l.id) || []).forEach(([t]) => t.full ? p.full++ : p.empty++);
+      const left = f ? Math.round(((f.etd || f.std) - T) / 60) : null;
+      const st = f ? (left < 0 ? pill('Pushback', 'var(--info-soft)', 'var(--info)') : left < 20 ? pill('Closing', 'var(--alert-soft)', 'var(--alert)') : pill('On stand', 'var(--ok-soft)', 'var(--ok)')) : pill('Free', 'var(--chip)', 'var(--muted)');
+      return `<button type="button" class="row ${sel?.id === l.id ? 'sel' : ''}" data-k="stand" data-id="${l.id}"><span class="id">${esc(l.name)}<small>stand</small></span><span class="w">${f ? `${esc(f.no)} · STD ${fmtT(f.etd || f.std)}` : 'No aircraft'}${p.full + p.empty ? ` · ${p.full + p.empty} ULD` : ''}</span>${st}<span class="n">${left != null ? (left >= 0 ? left + 'm' : 'gone') : ''}</span></button>`;
+    }).join('') || '<div class="empty">No stands in use for this day.</div>';
+  } else {
+    html = flightsToday.map(f => {
+      const I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
+      const st = I.phase === 'On stand' ? (left < 20 ? pill('Closing', 'var(--alert-soft)', 'var(--alert)') : pill('On stand', 'var(--ok-soft)', 'var(--ok)')) : I.phase === 'Inbound' ? pill('Inbound', 'var(--chip)', 'var(--muted)') : pill(I.phase, 'var(--info-soft)', 'var(--info)');
+      return `<button type="button" class="row ${sel?.id === f.id ? 'sel' : ''}" data-k="flight" data-id="${f.id}"><span class="id">${esc(f.no)}<small>stand ${esc(byId[f.stand]?.name ?? '—')}</small></span><span class="w">${I.del.length} ULD delivered${I.late.length ? ` · ${I.late.length} late` : ''} · STD ${fmtT(I.out)}</span>${st}<span class="n">${left >= 0 ? left + 'm' : 'gone'}</span></button>`;
+    }).join('') || '<div class="empty">No more departures today.</div>';
+  }
+  $('rows').innerHTML = html;
+  $('rows').querySelectorAll('.row').forEach(r => r.onclick = () => select(r.dataset.k, r.dataset.id, true));
+}
+
+// ---------- popovers: weather, alerts, search ----------
+function placePop(pop, btn) { const r = btn.getBoundingClientRect(), W = window.innerWidth, w = Math.min(320, W - 24); pop.style.width = w + 'px'; pop.style.left = clamp(r.right - w, 12, W - w - 12) + 'px'; pop.style.top = (r.bottom + 8) + 'px'; }
+function togglePop(id, btn, fn) { const p = $(id), open = p.hidden; ['wxPop', 'alPop'].forEach(k => { $(k).hidden = true; }); $('wxBtn').setAttribute('aria-expanded', 'false'); $('alBtn').setAttribute('aria-expanded', 'false'); if (open) { p.hidden = false; btn.setAttribute('aria-expanded', 'true'); placePop(p, btn); fn(); } }
+function renderWx(T) {
+  const w = wxAt(T);
+  if (!w) { $('wxPop').innerHTML = '<h3>Weather at Heathrow</h3><div class="note">No report for this moment.</div>'; return; }
+  const wind = w.kt == null ? '—' : w.kt < 3 ? 'Calm' : `${Math.round(w.dir ?? 0)}° (${compass(w.dir)}) ${Math.round(w.kt)} kt${w.gust ? `, gusts ${Math.round(w.gust)} kt` : ''}`;
+  const rw = rwyDir(T) < 0 ? '27R (landing west)' : '09L (landing east)';
+  $('wxPop').innerHTML = `<h3>Weather at Heathrow · ${fmtT(w.t)} UTC</h3>
+    <div class="kv"><span>Conditions</span><strong>${esc(w.what || '—')}</strong><span>Temperature</span><strong class="m">${Math.round(w.temp)}°C · dew ${Math.round(w.dew)}°C</strong>
+    <span>Wind</span><strong>${esc(wind)}</strong><span>Visibility</span><strong>${w.vis >= 9999 ? '10 km or more' : (w.vis / 1000).toFixed(1) + ' km'}</strong>
+    <span>Cloud cover</span><strong class="m">${w.cloud ?? '—'}%</strong><span>Sunrise · sunset</span><strong class="m">${w.day ? fmtT(w.day[0]) + ' · ' + fmtT(w.day[1]) : '—'}</strong>
+    <span>Runway in use (drawn)</span><strong>${rw}</strong></div>
+    <div class="raw">${esc(w.raw)}</div><div class="note">EGLL METAR via Iowa Environmental Mesonet; cloud cover and sun times from the Open-Meteo archive.</div>`;
+}
+function renderAlerts(T, al) {
+  $('alPop').innerHTML = `<h3>Alerts · ${al.length}</h3>` + (al.length ? al.slice(0, 10).map(a => {
+    const o = a.t.o, drv = drvById[o.driver];
+    return `<button type="button" class="res" data-o="${o.id}"><span class="k" style="color:${a.kind === 'Overdue' ? 'var(--alert)' : 'var(--warn)'}">${a.kind}</span><span><b>#${esc(o.no)} · ${a.n} ULD</b><small>${esc(o.from.label)} → ${esc(o.to.label)}${drv ? ' · ' + esc(drv.tag) : ' · no tug yet'}</small></span><span class="mono" style="font-size:12px">${a.mins != null ? (a.kind === 'Overdue' ? '+' : '') + a.mins + 'm' : ''}</span></button>`;
+  }).join('') : '<div class="note">No urgent or overdue ULDs right now.</div>');
+  $('alPop').querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const o = orders.get(b.dataset.o); if (o.driver && drvById[o.driver]) select('tug', o.driver, true); else if (o.from?.nose || o.from) select(o.from.type === 'FlightStand' ? 'stand' : 'bank', o.from.id, true); $('alPop').hidden = true; });
+}
+$('wxBtn').onclick = () => togglePop('wxPop', $('wxBtn'), () => renderWx(T));
+$('alBtn').onclick = () => togglePop('alPop', $('alBtn'), () => renderAlerts(T, alertsAt(T)));
+$('dnBtn').onclick = () => { dnMode = { auto: 'day', day: 'night', night: 'auto' }[dnMode]; store.set('flow-dn', dnMode); renderPanels(T, lastRes, true); };
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.pop, #wxBtn, #alBtn')) { $('wxPop').hidden = $('alPop').hidden = true; } if (!e.target.closest('.search')) $('results').hidden = true; });
+let hits = [], hitI = 0;
+function searchAll(q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  const out = [];
+  drivers.forEach(d => { if (inOrg(d.company) && (d.tag.toLowerCase().includes(q) || d.name.toLowerCase().includes(q))) out.push(['tug', d.id, 'Tug', d.tag, d.company || '']); });
+  D.flights.forEach(f => { if (String(f.no).toLowerCase().includes(q) && byId[f.stand]?.nose && (org === 'all' || flightOrgs.get(f.id)?.has(org))) out.push(['flight', f.id, 'Flight', f.no, `stand ${byId[f.stand].name} · ${fmtD(f.etd || f.std)} ${fmtT(f.etd || f.std)}`, f.etd || f.std]); });
+  allStands.forEach(l => { if (l.nose && l.name.toLowerCase().includes(q)) out.push(['stand', l.id, 'Stand', l.name, stands.includes(l) ? 'in use today' : 'not used today']); });
+  hall.forEach(l => { if (l.label.toLowerCase().includes(q) || l.name.toLowerCase().includes(q)) out.push(['bank', l.id, l.yard ? 'Store' : 'Bank', l.label, l.name]); });
+  out.sort((a, b) => a[0] === 'flight' && b[0] === 'flight' ? Math.abs(a[5] - T) - Math.abs(b[5] - T) : 0);
+  return out.slice(0, 12);
+}
+function showHits() {
+  const box = $('results'); box.hidden = !hits.length;
+  box.innerHTML = hits.map(([k, id, kind, name, sub], i) => `<button type="button" class="res ${i === hitI ? 'on' : ''}" data-i="${i}"><span class="k">${kind}</span><span><b>${esc(name)}</b><small>${esc(sub)}</small></span><span></span></button>`).join('');
+  box.querySelectorAll('.res').forEach(b => b.onclick = () => pickHit(+b.dataset.i));
+}
+function pickHit(i) {
+  const h = hits[i]; if (!h) return;
+  if (h[0] === 'flight') { const f = flights[h[1]], out = f.etd || f.std; if (Math.abs(out - T) > 3 * 3600) T = (f.sta || out - 150 * 60) + 20 * 60; }
+  select(h[0], h[1], true); $('results').hidden = true; $('q').blur();
+}
+$('q').addEventListener('input', e => { hits = searchAll(e.target.value); hitI = 0; showHits(); });
+$('q').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { hitI = Math.min(hits.length - 1, hitI + 1); showHits(); e.preventDefault(); }
+  if (e.key === 'ArrowUp') { hitI = Math.max(0, hitI - 1); showHits(); e.preventDefault(); }
+  if (e.key === 'Enter') pickHit(hitI);
+  if (e.key === 'Escape') { $('results').hidden = true; e.target.blur(); }
+});
+
+// ---------- timeline ----------
+const tl = $('tl'), tctx = tl.getContext('2d');
+let tlW = 0, tlH = 0;
+function drawTL(T) {
+  const dpr = window.devicePixelRatio || 1;
+  if (tl.clientWidth !== tlW || tl.clientHeight !== tlH) { tlW = tl.clientWidth; tlH = tl.clientHeight; tl.width = tlW * dpr; tl.height = tlH * dpr; }
+  if (!tlW || !tlH) return;
+  const g = tctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, tlW, tlH);
+  const ink = css('--ink'), muted = css('--muted'), line = css('--line'), chip = css('--chip'), teal = css('--teal');
+  const top = 16, base = tlH - 10, bw = tlW / nBins, X = t => (t - tMin) / 3600 * bw;
+  if (WX) {
+    g.fillStyle = chip;
+    WX.sun.forEach(([a, b], i) => { const n = WX.sun[i + 1]; if (n) g.fillRect(X(b), 0, X(n[0]) - X(b), base); });
+    const first = WX.sun.find(([a]) => a > tMin); if (first && first[0] - tMin < 86400) g.fillRect(0, 0, X(first[0]), base);
+  }
+  bins.forEach((b, i) => {
+    const hF = b[0] / maxBin * (base - top), hE = b[1] / maxBin * (base - top), x = i * bw + .5, w = Math.max(1, bw - 1.5);
+    g.globalAlpha = (i + 1) * 3600 + tMin <= T ? 1 : .4;
+    g.fillStyle = '#ff6a1a'; g.fillRect(x, base - hF, w, hF);
+    g.fillStyle = teal; g.fillRect(x, base - hF - hE, w, hE);
+  });
+  g.globalAlpha = 1;
+  if (WX) { g.fillStyle = '#3767c9'; WX.obs.forEach(o => { if (o.t >= tMin && o.t <= tMax && /RA|DZ|SN|SH|TS/.test(o.wx)) { g.beginPath(); g.arc(X(o.t), top - 6, 2.2, 0, Math.PI * 2); g.fill(); } }); }
+  g.font = '700 10.5px Archivo, Arial, sans-serif'; g.textBaseline = 'middle';
+  for (let t = dayStart(tMin); t < tMax; t += 86400) {
+    const x = Math.max(0, X(t));
+    if (t > tMin) { g.fillStyle = line; g.fillRect(x, 0, 1, base); }
+    if (bw * 24 > 70) { g.fillStyle = muted; g.fillText(fmtD(Math.max(t, tMin)), x + 5, 6); }
+  }
+  const x = X(T);
+  g.fillStyle = line; g.fillRect(0, tlH - 4, tlW, 3);
+  g.fillStyle = '#ff6a1a'; g.fillRect(0, tlH - 4, x, 3); g.fillRect(x - 1, 2, 2, tlH - 6);
+  g.beginPath(); g.arc(x, tlH - 3, 5.5, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = '#ff6a1a'; g.stroke();
+}
+let scrubbing = false;
+const tFromX = e => { const r = tl.getBoundingClientRect(); return clamp(tMin + (e.clientX - r.left) / r.width * (tMax - tMin), tMin, tMax); };
+tl.addEventListener('pointerdown', e => { scrubbing = true; tl.setPointerCapture(e.pointerId); T = tFromX(e); renderPanels(T, lastRes = sceneState(T), true); });
+tl.addEventListener('pointermove', e => { if (scrubbing) T = tFromX(e); });
+tl.addEventListener('pointerup', () => { scrubbing = false; });
+
+// ---------- controls ----------
+let T = tMin + busiest * 3600 - 40 * 60;
+let playing = !reduced, speed = 60;
+const syncPlay = () => { $('play').innerHTML = playing ? '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="2.5" y="2" width="3" height="10" rx="1"/><rect x="8.5" y="2" width="3" height="10" rx="1"/></svg>' : '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3.5 2v10l9-5z"/></svg>'; $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play'); };
+$('play').onclick = () => { playing = !playing; syncPlay(); };
+$('speed').onchange = e => speed = +e.target.value;
+$('skip').onclick = () => {
+  let n = Infinity; orders.forEach(o => { if (o.a && o.a > T + 5 && inOrg(o.company)) n = Math.min(n, o.a); });
+  if (n < Infinity) { T = n - 20; const o = [...orders.values()].find(x => x.a === n && inOrg(x.company)); lastRes = sceneState(T); if (o && drvById[o.driver]) select('tug', o.driver, true); }
+};
+for (let t = dayStart(tMin); t < tMax; t += 86400) { const op = document.createElement('option'); op.value = Math.max(t + 5 * 3600, tMin); op.textContent = fmtD(t); $('day').append(op); }
+$('day').onchange = () => { T = +$('day').value; };
+try { const v = store.get('flow-org', 'all'); if (v === 'all' || ORGS.includes(v)) org = v; } catch (e) { /* storage unavailable */ }
+function buildOrgFilter() {
+  $('org').innerHTML = ['all', ...ORGS].map(v => `<button type="button" data-o="${v}" aria-pressed="${org === v}">${v === 'all' ? 'All' : esc(v)}</button>`).join('');
+  $('org').querySelectorAll('button').forEach(b => b.onclick = () => setOrg(b.dataset.o));
+  $('orgSel').innerHTML = ['all', ...ORGS].map(v => `<option value="${v}" ${org === v ? 'selected' : ''}>${v === 'all' ? 'All' : esc(v)}</option>`).join('');
+}
+function setOrg(v) { org = v; store.set('flow-org', v); computeBins(); buildOrgFilter(); lastRes = sceneState(T); renderPanels(T, lastRes, true); }
+$('orgSel').onchange = e => setOrg(e.target.value);
+buildOrgFilter(); computeBins(); syncPlay();
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playing = !playing; syncPlay(); } });
+
+// minimisable panels, remembered per viewer
+let minimised = new Set(store.get('flow-min', []));
+document.querySelectorAll('[data-panel]').forEach(el => {
+  const b = document.createElement('button'), key = el.dataset.panel;
+  b.type = 'button'; b.className = 'min';
+  const sync = () => {
+    const c = minimised.has(key);
+    el.classList.toggle('collapsed', c);
+    b.title = (c ? 'Show ' : 'Minimise ') + el.dataset.title; b.setAttribute('aria-expanded', String(!c));
+    b.innerHTML = c ? `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 3v8M3 7h8"/></svg><span>${el.dataset.title}</span>`
+                    : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2.5 6h7"/></svg>';
+  };
+  b.onclick = () => { minimised.has(key) ? minimised.delete(key) : minimised.add(key); store.set('flow-min', [...minimised]); sync(); };
+  el.prepend(b); sync();
+});
+
+// phones: the panels move into a bottom sheet with tabs
+let phone = null;
+function layoutMode() {
+  const p = isPhone(); if (p === phone) return; phone = p;
+  const app = $('app');
+  if (p) { $('sheetTime').append($('pTime')); $('sDetail').append($('detail')); $('sTrack').append(...[...$('pTrack').children].filter(c => !c.classList.contains('min'))); $('sList').append($('tabs'), $('rows')); }
+  else { app.append($('pTime')); $('pDetail').append($('detail')); $('pTrack').append(...[...$('sTrack').children]); $('pTable').append($('tabs'), $('rows')); }
+}
+$('grab').onclick = () => $('sheet').classList.toggle('open');
+$('stabs').querySelectorAll('button').forEach(b => b.onclick = () => {
+  $('stabs').querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  $('sbody').querySelectorAll('section').forEach(s => s.classList.toggle('on', s.dataset.s === b.dataset.s));
+  $('sheet').classList.add('open');
+});
+
+// ---------- loop ----------
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+  layoutMode();
+}
+window.addEventListener('resize', () => { resize(); if (!userMoved) goArea(area); });
+let lastNow = performance.now();
+function tick(now) {
+  const dt = Math.min(.1, (now - lastNow) / 1000); lastNow = now;
+  if (playing && !scrubbing) { T += dt * speed; if (T > tMax) T = tMin; }
+  const res = lastRes = sceneState(T);
+  // glide the camera toward its goal
+  const k = 1 - Math.exp(-dt * 4.5);
+  let da = goal.az - cam.az; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+  cam.tx += (goal.tx - cam.tx) * k; cam.tz += (goal.tz - cam.tz) * k; cam.dist += (goal.dist - cam.dist) * k; cam.az += da * k; cam.el += (goal.el - cam.el) * k;
+  applyCamera();
+  updateWorld(T, res, dt);
+  if (now - lastPanel > 300) { renderPanels(T, res); lastPanel = now; drawTL(T); }
+  renderer.render(scene, camera);
+  flushLabels();
+  requestAnimationFrame(tick);
+}
+
+// Read-only hook for tools/validate.py (same contract in every view).
+window.apronDebug = {
+  snapshot(t, o = 'all') {
+    playing = false; syncPlay();
+    org = o; computeBins(); buildOrgFilter();
+    T = t;
+    const res = lastRes = sceneState(T); renderPanels(T, res, true); drawTL(T);
+    const piles = {};
+    res.piles.forEach((list, id) => { const p = piles[byId[id].name] = { full: 0, empty: 0 }; list.forEach(([task]) => task.full ? p.full++ : p.empty++); });
+    return {
+      t: T, org, stats: lastStats,
+      drivers: res.states.map(({ d, st }) => ({ id: d.id, tag: d.tag, company: d.company, status: statusStyle(st)[0], order: st.o && st.k !== 'idle' ? st.o.id : null })),
+      rosterVisible: drivers.filter(d => inOrg(d.company)).map(d => d.tag),
+      planes: [...res.planeAt.entries()].map(([id, f]) => ({ stand: byId[id].name, flight: f.no, flightId: f.id })),
+      piles, chartTotal: bins.reduce((a, b) => a + b[0] + b[1], 0), logTop: [],
+    };
+  },
+  range: () => ({ tMin, tMax }),
+};
+
+resize();
+lastRes = sceneState(T);
+goArea('all'); Object.assign(cam, goal); cam.dist *= 1.6;   // a short glide in on load
+renderPanels(T, lastRes, true); drawTL(T);
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
