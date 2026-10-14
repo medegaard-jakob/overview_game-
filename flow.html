@@ -253,7 +253,7 @@ button { cursor: pointer; }
 
   <header class="top glass">
     <div class="logo">
-      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="9" fill="#009de0"/><path d="M9 21.5c3.2-.2 5.3-1.6 7-4.2 1.6-2.4 3.6-4.6 8.5-4.8" stroke="#fff" stroke-width="2.6" stroke-linecap="round" fill="none"/><circle cx="24.5" cy="12.5" r="2.2" fill="#fff"/><path d="M9 25h16" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></svg>
+      <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="14" fill="#009de0"/><path d="M14 16h27v16l-6 6H14z" fill="#ffffff"/><path d="M14 21h27" stroke="#0076a8" stroke-width="2"/><path d="M21 25v10M28 25v10M35 25v5" stroke="#0076a8" stroke-width="2" stroke-linecap="round"/><rect x="11" y="39" width="33" height="4.5" rx="1.5" fill="#004e70"/><circle cx="17" cy="47.5" r="3.6" fill="#004e70"/><circle cx="38" cy="47.5" r="3.6" fill="#004e70"/><path d="M46 32h9M51 27l5 5-5 5" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <div><b>Flow <i>CTRL</i></b><small>Hearhow Airport · T1 baggage → T2 apron</small></div>
     </div>
     <span class="sep"></span>
@@ -1011,9 +1011,15 @@ nightMats.push([mat.glass, .95]);
   const draw = () => {
     g.clearRect(0, 0, 2048, 512);
     g.fillStyle = '#ffffff'; g.beginPath(); g.roundRect ? g.roundRect(8, 8, 2032, 496, 60) : g.rect(8, 8, 2032, 496); g.fill();
-    g.fillStyle = '#009de0'; g.beginPath(); g.roundRect ? g.roundRect(70, 92, 328, 328, 70) : g.rect(70, 92, 328, 328); g.fill();
-    g.strokeStyle = '#fff'; g.lineWidth = 26; g.lineCap = 'round'; g.beginPath(); g.moveTo(140, 300); g.bezierCurveTo(230, 296, 260, 180, 330, 176); g.stroke();
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(330, 176, 24, 0, Math.PI * 2); g.fill();
+    // the Flow CTRL mark: a ULD on a dolly moving forward (same as the top bar logo, 64-unit grid)
+    g.save(); const k = 328 / 60; g.translate(70 - 2 * k, 92 - 2 * k); g.scale(k, k);
+    g.fillStyle = '#009de0'; g.beginPath(); g.roundRect ? g.roundRect(2, 2, 60, 60, 14) : g.rect(2, 2, 60, 60); g.fill();
+    g.fillStyle = '#ffffff'; g.fill(new Path2D('M14 16h27v16l-6 6H14z'));
+    g.strokeStyle = '#0076a8'; g.lineWidth = 2; g.lineCap = 'round'; g.stroke(new Path2D('M14 21h27M21 25v10M28 25v10M35 25v5'));
+    g.fillStyle = '#004e70'; g.beginPath(); g.roundRect ? g.roundRect(11, 39, 33, 4.5, 1.5) : g.rect(11, 39, 33, 4.5); g.fill();
+    [17, 38].forEach(x => { g.beginPath(); g.arc(x, 47.5, 3.6, 0, Math.PI * 2); g.fill(); });
+    g.strokeStyle = '#ffffff'; g.lineWidth = 3.4; g.lineJoin = 'round'; g.stroke(new Path2D('M46 32h9M51 27l5 5-5 5'));
+    g.restore();
     g.fillStyle = '#15212b'; g.font = '800 196px Archivo, Arial'; g.textBaseline = 'alphabetic'; g.fillText('Flow', 450, 300);
     g.fillStyle = '#009de0'; g.fillText('CTRL', 450 + g.measureText('Flow ').width, 300);
     g.fillStyle = '#004e70'; g.font = '700 84px Archivo, Arial'; g.fillText('at Hearhow Airport', 456, 410);
