@@ -1209,7 +1209,7 @@ function makeTug(color) {
   add(TG.roof, roofM, -.5, 2.64, 0); add(TG.beacon, beaconM, -.5, 2.79, 0);
   [[1.05, .76], [1.05, -.76], [-1.05, .76], [-1.05, -.76]].forEach(([x, z]) => { add(TG.wheel, tugMat.rubber, x, .37, z); add(TG.hub, tugMat.hub, x, .37, z); });
   add(TG.hitch, tugMat.frame, -1.95, .48, 0);
-  g.scale.setScalar(1.5); g.userData.bodyM = roofM; g.userData.beaconM = beaconM; return g;
+  g.scale.setScalar(2.4); g.userData.bodyM = roofM; g.userData.beaconM = beaconM; return g;
 }
 function makePushback() {
   const g = new THREE.Group(), add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
@@ -1234,17 +1234,18 @@ const dollies = new THREE.InstancedMesh(dollyGeo, new THREE.MeshStandardMaterial
 [uFull, uEmpty, dollies].forEach(m => { m.castShadow = true; m.receiveShadow = true; m.count = 0; m.frustumCulled = false; scene.add(m); });
 uTag.count = 0; uTag.frustumCulled = false; scene.add(uTag);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _e = new THREE.Euler();
-const US = 1.45;   // ULD and dolly scale (toy look)
+const US = 2.3;    // ULD and dolly scale: oversized on purpose, ULD flow is what the view is about
+const UH = 2 * US + .1;   // stacked ULD height
 function setInst(im, n, x, y, z, yaw = 0, sc = US) { _q.setFromEuler(_e.set(0, yaw, 0)); _s.set(sc, sc, sc); _m.compose(_v.set(x, z, y), _q, _s); im.setMatrixAt(n, _m); }
 
 // pile slots (3D spacing) at banks, can stores and stands
 function slot(l, i) {
-  if (l.type === 'Chute') { const c = i % 4, r = Math.floor(i / 4) % 3, k = Math.floor(i / 12); return [HALL.x1 + 6 + c * 3.8, l.y - 4 + r * 3.7, k * 2.95]; }
-  if (l.yard) { const y = l.yard, c = i % 12, r = Math.floor(i / 12) % 10, k = Math.floor(i / 120); return [y.x0 + 8 + c * 4.6, y.y0 + 8 + r * 4.2, k * 2.95]; }
-  const F = standFrame(l), [x, y] = F(22 + (i >= 8 ? 4 : 0), 5 + (i % 8) * 3.9);
-  return [x, y, i >= 16 ? 2.95 : 0];
+  if (l.type === 'Chute') { const c = i % 3, r = Math.floor(i / 3) % 4, k = Math.floor(i / 12); return [HALL.x1 + 5 + c * 6, l.y - 9 + r * 6, k * UH]; }
+  if (l.yard) { const y = l.yard, c = i % 10, r = Math.floor(i / 10) % 9, k = Math.floor(i / 90); return [y.x0 + 7 + c * 6.4, y.y0 + 7 + r * 6.4, k * UH]; }
+  const F = standFrame(l), [x, y] = F(24 + (i % 16 >= 8 ? 6.5 : 0), 4 + (i % 8) * 6);
+  return [x, y, i >= 16 ? UH : 0];
 }
-const CAP = l => l.type === 'Chute' ? 24 : l.yard ? 240 : 24;
+const CAP = l => l.type === 'Chute' ? 24 : l.yard ? 180 : 32;
 
 // ---------- selection ring ----------
 const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.25, 48), new THREE.MeshBasicMaterial({ color: '#009de0', transparent: true, opacity: .9, depthWrite: false }));
@@ -1491,14 +1492,17 @@ function updateWorld(T, res, dt) {
   // ULD piles
   let nf = 0, ne = 0, nt = 0, nd = 0;
   const now = performance.now() / 1000;
-  const putULD = (t, x, y, z, yaw = 0) => {
-    if (t.full) { if (nf < CAPU) setInst(uFull, nf++, x, y, z, yaw); } else if (ne < CAPU) setInst(uEmpty, ne++, x, y, z, yaw);
-    if (t.ev && (isUrgent(t, T) || overdue(t, T)) && nt < 400) setInst(uTag, nt++, x, y, z + 4.4 + Math.sin(now * 4) * .3, now, 1.2);
+  // tugs and ULDs grow as the camera pulls back (like map markers), so the flow stays easy to follow at any zoom
+  const vm = clamp(cam.dist / 280, 1, 3.2), vp = clamp(cam.dist / 380, 1, 1.8);
+  const putULD = (t, x, y, z, yaw = 0, k = 1) => {
+    if (t.full) { if (nf < CAPU) setInst(uFull, nf++, x, y, z, yaw, US * k); } else if (ne < CAPU) setInst(uEmpty, ne++, x, y, z, yaw, US * k);
+    if (t.ev && (isUrgent(t, T) || overdue(t, T)) && nt < 400) setInst(uTag, nt++, x, y, z + (UH + 1.6 + Math.sin(now * 4) * .4) * k, now, 2 * k);
   };
   res.piles.forEach((list, id) => {
     const l = byId[id]; if (l.x == null) return;
     const cap = CAP(l), yaw = l.nose ? Math.atan2(-l.h[1], l.h[0]) : 0;
-    list.slice(0, cap).forEach(([t], i) => { const [x, y, z] = slot(l, i); putULD(t, x, y, z, yaw); });
+    const k = l.yard ? 1 : vp, [ax, ay] = slot(l, 0);
+    list.slice(0, cap).forEach(([t], i) => { const [x, y, z] = slot(l, i); putULD(t, ax + (x - ax) * k, ay + (y - ay) * k, z * k, yaw, k); });
     if (list.length > cap) { const [x, y] = slot(l, cap - 1); label('more' + id, x, y, 6, `+${list.length - cap}`, 'soft', 6); }
   });
   // tugs with their dolly trains
@@ -1514,21 +1518,21 @@ function updateWorld(T, res, dt) {
     const want = Math.atan2(-d._p.dy, (d._p.dx || (d._p.dy ? 0 : 1)));
     let dy = want - g.userData.yaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI;
     g.userData.yaw += dy * clamp(dt * 8, 0, 1);
-    g.position.set(d._p.x, 0, d._p.y); g.rotation.y = g.userData.yaw;
+    g.position.set(d._p.x, 0, d._p.y); g.rotation.y = g.userData.yaw; g.scale.setScalar(2.4 * vm);
     if (st.k === 'carry' || st.k === 'atdrop') {
       st.o.tasks.filter(t => !(t.can && t.can <= T)).slice(0, 6).forEach((t, k) => {
         let q;
-        if (d._path) { const p = pointAt(d._path, d._s - 7.6 - k * 4.8); q = { x: p.x, y: p.y, yaw: Math.atan2(-p.dy, p.dx || (p.dy ? 0 : 1)) }; }
-        else { const fx = Math.cos(g.userData.yaw), fy = -Math.sin(g.userData.yaw); q = { x: d._p.x - fx * (7.6 + k * 4.8), y: d._p.y - fy * (7.6 + k * 4.8), yaw: g.userData.yaw }; }
-        if (nd < 300) setInst(dollies, nd++, q.x, q.y, 0, q.yaw);
-        putULD(t, q.x, q.y, .66 * US, q.yaw);
+        if (d._path) { const p = pointAt(d._path, d._s - (11.5 + k * 7.4) * vm); q = { x: p.x, y: p.y, yaw: Math.atan2(-p.dy, p.dx || (p.dy ? 0 : 1)) }; }
+        else { const fx = Math.cos(g.userData.yaw), fy = -Math.sin(g.userData.yaw); q = { x: d._p.x - fx * (11.5 + k * 7.4) * vm, y: d._p.y - fy * (11.5 + k * 7.4) * vm, yaw: g.userData.yaw }; }
+        if (nd < 300) setInst(dollies, nd++, q.x, q.y, 0, q.yaw, US * vm);
+        putULD(t, q.x, q.y, .66 * US * vm, q.yaw, vm);
       });
     }
     const urgentRun = st.o && st.k !== 'idle' && st.o.tasks.some(t => isUrgent(t, T));
     const isSel = sel?.kind === 'tug' && sel.id === d.id;
     const [txt] = statusStyle(st);
-    if (isSel) label('tug' + d.id, d._p.x, d._p.y, 7, `${esc(d.tag)} <em>${esc(txt)}</em>`, 'sel', 0);
-    else label('tug' + d.id, d._p.x, d._p.y, 7, urgentRun ? `${esc(d.tag)} <em>URGENT</em>` : `<span class="dot" style="background:${col}"></span>${esc(d.tag)}`, urgentRun ? 'urgent' : '', urgentRun ? 1 : 3);
+    if (isSel) label('tug' + d.id, d._p.x, d._p.y, 10 * vm, `${esc(d.tag)} <em>${esc(txt)}</em>`, 'sel', 0);
+    else label('tug' + d.id, d._p.x, d._p.y, 10 * vm, urgentRun ? `${esc(d.tag)} <em>URGENT</em>` : `<span class="dot" style="background:${col}"></span>${esc(d.tag)}`, urgentRun ? 'urgent' : '', urgentRun ? 1 : 3);
   });
   tugObjs.forEach((g, id) => { if (!seen.has(id)) g.visible = false; });
   uFull.count = nf; uEmpty.count = ne; uTag.count = nt; dollies.count = nd;
