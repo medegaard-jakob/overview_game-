@@ -322,6 +322,14 @@ button { cursor: pointer; }
 (() => {
 'use strict';
 const D = window.REPLAY_DATA;
+// Flow CTRL's own hall layout (the other views keep theirs): United gets a bay on the hall's north-east
+// corner with a wide loading apron and a longer service road where its tugs can wait.
+const FLOW_LAYOUT = {
+  docks: { 'United Bank 1': { x: 733, y: 243, face: 'n' }, 'EI Bank': { x: 752, y: 375, face: 'e' } },
+  bay: { x0: 712, x1: 754, y0: 243, y1: 282 },
+  roads: [[[690, 202], [780, 202]]],
+  dropRoad: r => r[0][1] === 240 && r[1][1] === 240,     // the main view's short spur is replaced by the road above
+};
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 // status colours for the tugs: full runs in brand blue like full ULDs, empty runs in navy
 const C = {
@@ -350,7 +358,7 @@ const chutes = hall.filter(l => l.type === 'Chute').sort((a, b) => a.name.locale
 const HALL = ML.hall;
 // bank doors along the east face of the T1 baggage hall; can stores are yards across the road
 // doors come from the layout (face 'e' east or 'n' north); a bank not listed gets a slot on the east face
-chutes.forEach((l, i) => { const d = (ML.docks || {})[l.name]; l.hall = true; l.face = d ? d.face : 'e'; l.x = d ? d.x : HALL.x1; l.y = d ? d.y : HALL.y0 + 34 + i * 40; });
+chutes.forEach((l, i) => { const d = FLOW_LAYOUT.docks[l.name]; l.hall = true; l.face = d ? d.face : 'e'; l.x = d ? d.x : HALL.x1; l.y = d ? d.y : HALL.y0 + 34 + i * 40; });
 const doorOut = l => l.face === 'n' ? [0, -1] : [1, 0];   // outward from the hall
 const doorAlong = l => l.face === 'n' ? [1, 0] : [0, 1];  // along the hall face
 hall.filter(l => l.type !== 'Chute').forEach((l, i) => {
@@ -370,7 +378,7 @@ function layoutStands(list) { stands = list; }
 D.locations.forEach(l => l.label = shortName(l));
 
 // ---------- road network: axis-aligned road segments, shortest paths between access points ----------
-const ROADS = ML.roads.map(([a, b]) => ({ a, b, v: a[0] === b[0] }));
+const ROADS = ML.roads.filter(r => !FLOW_LAYOUT.dropRoad(r)).concat(FLOW_LAYOUT.roads).map(([a, b]) => ({ a, b, v: a[0] === b[0] }));
 function project(x, y) {
   let best = null;
   ROADS.forEach((r, i) => {
@@ -978,7 +986,7 @@ function paintGround(active) {
   // can stores and the dock in front of the bank doors
   yards.forEach(l => { const y = l.yard; g.fillStyle = '#dde2e6'; rr(y.x0, y.y0, y.x1 - y.x0, y.y1 - y.y0, 3); g.fill(); g.setLineDash([3, 2]); g.strokeStyle = 'rgba(60,80,100,.45)'; g.lineWidth = .6; g.stroke(); g.setLineDash([]); });
   g.fillStyle = '#d9dfe4'; g.fillRect(HALL.x1, HALL.y0, 24, HALL.y1 - HALL.y0);
-  chutes.filter(l => l.face === 'n').forEach(l => g.fillRect(l.x - 26, HALL.y0 - 34, 52, 34));   // dock apron at the north door
+  chutes.filter(l => l.face === 'n').forEach(l => { g.fillRect(l.x - 26, l.y - 47, 52, 47); g.fillStyle = 'rgba(0,118,168,.08)'; g.fillRect(l.x - 24, l.y - 45, 48, 41); g.fillStyle = '#d9dfe4'; });   // loading apron at the north door
   gtex.needsUpdate = true;
 }
 
@@ -1010,9 +1018,13 @@ nightMats.push([mat.glass, .95]);
     const g = new THREE.ExtrudeGeometry(sh, { depth: x1 - x0 - 4, bevelEnabled: false });
     const m = new THREE.Mesh(g, [mat.hallRoof, mat.hallRoof]); m.rotation.y = Math.PI / 2; m.position.set(x0 + 2, h, y + 12); m.castShadow = true; world.add(m);
   }
+  { const b = FLOW_LAYOUT.bay, bay = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0, 18, b.y1 - b.y0), mat.hall);
+    bay.position.set((b.x0 + b.x1) / 2, 9, (b.y0 + b.y1) / 2); bay.castShadow = bay.receiveShadow = true; world.add(bay);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0 + .6, .8, b.y1 - b.y0 + .6), mat.roof); roof.position.set((b.x0 + b.x1) / 2, 18.4, (b.y0 + b.y1) / 2); world.add(roof);
+    const fascia = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0, 1.6, .8), mat.hallRoof); fascia.position.set((b.x0 + b.x1) / 2, 17.4, b.y0 - .4); world.add(fascia); }
   chutes.forEach(l => {
     const north = l.face === 'n', d = new THREE.Mesh(new THREE.BoxGeometry(.6, 13, 16), mat.door), f = new THREE.Mesh(new THREE.BoxGeometry(.8, 1.2, 18), mat.accent);
-    if (north) { d.rotation.y = f.rotation.y = Math.PI / 2; d.position.set(l.x, 6.5, y0 - .2); f.position.set(l.x, 13.6, y0 - .3); }
+    if (north) { d.rotation.y = f.rotation.y = Math.PI / 2; d.position.set(l.x, 6.5, l.y - .2); f.position.set(l.x, 13.6, l.y - .3); }
     else { d.position.set(x1 + .2, 6.5, l.y); f.position.set(x1 + .3, 13.6, l.y); }
     world.add(d, f);
   });
@@ -1253,7 +1265,7 @@ function setInst(im, n, x, y, z, yaw = 0, sc = US) { _q.setFromEuler(_e.set(0, y
 
 // pile slots (3D spacing) at banks, can stores and stands
 function slot(l, i) {
-  if (l.type === 'Chute') { const c = i % 3, r = Math.floor(i / 3) % 4, k = Math.floor(i / 12), [ox, oy] = doorOut(l), [ax, ay] = doorAlong(l), u = 5 + c * 6, v = -9 + r * 6; return [l.x + ox * u + ax * v, l.y + oy * u + ay * v, k * UH]; }
+  if (l.type === 'Chute') { const n = l.face === 'n' ? 6 : 4, c = i % 3, r = Math.floor(i / 3) % n, k = Math.floor(i / (3 * n)), [ox, oy] = doorOut(l), [ax, ay] = doorAlong(l), u = 5 + c * 6, v = (r - (n - 1) / 2) * 6; return [l.x + ox * u + ax * v, l.y + oy * u + ay * v, k * UH]; }
   if (l.yard) { const y = l.yard, c = i % 10, r = Math.floor(i / 10) % 9, k = Math.floor(i / 90); return [y.x0 + 7 + c * 6.4, y.y0 + 7 + r * 6.4, k * UH]; }
   const F = standFrame(l), [x, y] = F(24 + (i % 16 >= 8 ? 6.5 : 0), 4 + (i % 8) * 6);
   return [x, y, i >= 16 ? UH : 0];
@@ -1316,7 +1328,7 @@ function frameBox(pts, opt = {}) {
   if (opt.az != null) goal.az = opt.az; if (opt.el != null) goal.el = opt.el;
 }
 const AREAS = [
-  ['hall', 'Baggage hall', () => frameBox([[HALL.x0, HALL.y0], [880, HALL.y1 + 120], [880, HALL.y0 - 40]], { min: 260, k: 1 })],
+  ['hall', 'Baggage hall', () => frameBox([[HALL.x0, HALL.y0], [880, HALL.y1 + 100], [880, 190], [690, 190]], { min: 260, k: 1 })],
   ['t2a', 'T2A', () => frameBox(stands.filter(l => l.nose && l.x < 990).map(l => l.nose).concat([[600, 600]]), { min: 380 })],
   ['t2b', 'T2B pier', () => frameBox(stands.filter(l => l.nose && l.x >= 990).map(l => l.nose).concat([[1100, 300], [1100, 600]]), { min: 420 })],
   ['rwy', 'Runway', () => frameBox([[RWY.x0 + 300, RWY.y], [RWY.x1 - 300, RWY.y]], { min: 900, k: .8, el: .55 })],
