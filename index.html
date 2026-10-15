@@ -257,7 +257,10 @@ const hall = D.locations.filter(l => l.type !== 'FlightStand');
 const chutes = hall.filter(l => l.type === 'Chute').sort((a, b) => a.name.localeCompare(b.name));
 const HALL = ML.hall;
 // bank doors along the east face of the T1 baggage hall; can stores are yards across the road
-chutes.forEach((l, i) => { l.hall = true; l.x = HALL.x1; l.y = HALL.y0 + 34 + i * 40; });
+// doors come from the layout (face 'e' east or 'n' north); a bank not listed gets a slot on the east face
+chutes.forEach((l, i) => { const d = (ML.docks || {})[l.name]; l.hall = true; l.face = d ? d.face : 'e'; l.x = d ? d.x : HALL.x1; l.y = d ? d.y : HALL.y0 + 34 + i * 40; });
+const doorOut = l => l.face === 'n' ? [0, -1] : [1, 0];   // outward from the hall
+const doorAlong = l => l.face === 'n' ? [1, 0] : [0, 1];  // along the hall face
 hall.filter(l => l.type !== 'Chute').forEach((l, i) => {
   l.hall = true; l.yard = { x0: 800, x1: 872, y0: 300 + i * 84, y1: 366 + i * 84 };
   l.x = 800; l.y = l.yard.y0 + 33;
@@ -722,6 +725,7 @@ function drawGround(active) {
   });
   // dock apron in front of the hall doors
   ctx.fillStyle = '#e8edf3'; ctx.fillRect(HALL.x1, HALL.y0, 22, HALL.y1 - HALL.y0);
+  chutes.filter(l => l.face === 'n').forEach(l => ctx.fillRect(l.x - 24, HALL.y0 - 30, 48, 30));
   screen();
 }
 function drawTree(x, y, r = 11) {
@@ -752,7 +756,8 @@ function drawBuildings(see = new Set()) {
   ctx.globalAlpha = 1;
   chutes.forEach(l => {
     const d = [[-10, 0, 19, C.brand], [-8, .05, 17, '#5b6a80'], [-8, .1, 13, '#7a879a'], [-5, .15, 7, '#d9a35c']];
-    d.forEach(([w, e, hh, c]) => poly([P(x1 + e, l.y + w, 0), P(x1 + e, l.y - w, 0), P(x1 + e, l.y - w, hh), P(x1 + e, l.y + w, hh)], c));
+    if (l.face === 'n') d.forEach(([w, e, hh, c]) => poly([P(l.x - w, y0 - e, 0), P(l.x + w, y0 - e, 0), P(l.x + w, y0 - e, hh), P(l.x - w, y0 - e, hh)], c));
+    else d.forEach(([w, e, hh, c]) => poly([P(x1 + e, l.y + w, 0), P(x1 + e, l.y - w, 0), P(x1 + e, l.y - w, hh), P(x1 + e, l.y + w, hh)], c));
   });
 }
 
@@ -882,7 +887,7 @@ function brackets(sx, sy, r) {
 
 // ---------- pile slots ----------
 function slot(l, i) {   // returns [x, y, z] for the i-th ULD at a location
-  if (l.type === 'Chute') { const c = i % 3, r = Math.floor(i / 3) % 2, layer = Math.floor(i / 6); return [HALL.x1 + 1.5 + c * 6.3, l.y - 7 + r * 6.6 + (r ? 1 : -1) * 2, layer * ULD]; }
+  if (l.type === 'Chute') { const c = i % 3, r = Math.floor(i / 3) % 2, layer = Math.floor(i / 6), [ox, oy] = doorOut(l), [ax, ay] = doorAlong(l), u = 1.5 + c * 6.3 + (ox < 0 || oy < 0 ? -ULD : 0), v = -7 + r * 6.6 + (r ? 1 : -1) * 2; return [l.x + ox * u + ax * v, l.y + oy * u + ay * v, layer * ULD]; }
   if (l.yard) { const c = i % 10, r = Math.floor(i / 10) % 8, layer = Math.floor(i / 80); return [l.yard.x0 + 2 + c * 6.8, l.yard.y0 + 3 + r * 7.6, layer * ULD]; }
   const F = standFrame(l), side = ((-l.h[1]) * XB + l.h[0] * YB) >= 0 ? 1 : -1;   // beside the plane, on the viewer's side
   const [x, y] = F(side * (22 + (i >= 7 ? 7 : 0)), 6 + (i % 7) * 6.6);
@@ -1042,7 +1047,7 @@ function frame(T) {
   drawWeather(w);
 
   // signs and ground labels
-  chutes.forEach(l => label(HALL.x1, l.y, 26, l.label, { bg: '#fff', fg: '#1e3a8a', ring: '#c7d7fe', size: 11.5, prio: 4 }));
+  chutes.forEach(l => label(l.x, l.y, 26, l.label, { bg: '#fff', fg: '#1e3a8a', ring: '#c7d7fe', size: 11.5, prio: 4 }));
   hall.filter(l => l.yard).forEach(l => label((l.yard.x0 + l.yard.x1) / 2, l.yard.y0, 2, l.label, { bg: 'rgba(255,255,255,.9)', fg: '#334155', ring: '#d5dde8', size: 11, prio: 4 }));
   label((HALL.x0 + HALL.x1) / 2, HALL.y0, 34, 'T1 BAGGAGE HALL', { bg: C.brand, fg: '#fff', size: 11, prio: 4 });
   allStands.forEach(l => {

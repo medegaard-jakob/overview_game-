@@ -60,6 +60,10 @@ for fn in ('Logs-flightCreated.json', 'Logs-flightUpdated.json'):
                                              'stand': None, 'sta': None, 'std': None, 'etd': None})
         cur['no'] = cur['no'] or fl.get('flightNumber')
         cur['stand'] = cur['stand'] or fl.get('aircraftStandId')
+        # stand history: every logged stand with the time it was set (Flow CTRL moves the aircraft with it)
+        when = json.loads(body).get('createdTs') or json.loads(body).get('updatedTs')
+        if when and fl.get('aircraftStandId'):
+            cur.setdefault('standLog', []).append([ts_iso(when), fl['aircraftStandId']])
         for k, src in (('sta', 'scheduledTimeOfArrival'), ('std', 'scheduledTimeOfDeparture'), ('etd', 'estimatedTimeOfDeparture')):
             if not cur[k] and fl.get(src):
                 cur[k] = ts_iso(fl[src])
@@ -68,6 +72,11 @@ for fn in ('Logs-flightCreated.json', 'Logs-flightUpdated.json'):
 test_flights = {i for i, f in flights.items() if 'beumer' in (f['no'] or '').lower()}
 for i in test_flights:
     del flights[i]
+for f in flights.values():        # stand history sorted, repeats of the same stand dropped
+    log, out = sorted(f.pop('standLog', [])), []
+    for t, st in log:
+        if not out or out[-1][1] != st: out.append([t, st])
+    if out: f['standLog'] = out
 
 STATUS = {'READY': 'ready', 'AWAITING_START_TIME': 'waiting', 'AWAITING_DEPENDENCY': 'waiting',
           'ACCEPTED': 'accepted', 'COLLECTED': 'collected', 'DELIVERED': 'delivered', 'CANCELLED': 'cancelled'}

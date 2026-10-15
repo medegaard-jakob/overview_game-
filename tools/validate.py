@@ -301,6 +301,38 @@ if RUN_PAGE:
     # B5 planes on stand follow the documented rule
     bad, overlap, logonly = [], [], []
     csv_flights = {f['FlightNumber'] for f in flights.values()}
+    # Flow CTRL moves the aircraft with the logged stand changes the deliveries confirm, and with no STA brings it in
+    # no later than 2 min before its first ULD reaches a stand; when two flights share a stand the first one in keeps it
+    FLOW = 'standAt(' in open(os.path.join(ROOT, PAGE)).read()
+    stand_log = collections.defaultdict(list)
+    for fn in ('Logs-flightCreated.json', 'Logs-flightUpdated.json'):
+        for e in json.load(open(os.path.join(SRC, fn))):
+            body = json.loads(json.loads(e['line']).get('metadata', {}).get('body') or '{}')
+            fl, when = body.get('flight') or {}, body.get('createdTs') or body.get('updatedTs')
+            st = locs.get(fl.get('aircraftStandId'), {}).get('Name')
+            if fl.get('id') and when and st:
+                stand_log[fl['id']].append((int(datetime.fromisoformat(when.replace('Z', '+00:00')).timestamp()), st))
+    stand_dels = collections.defaultdict(list)
+    for t in delivered:
+        if t['flight'] and locs_by_name.get(t['drop'], {}).get('LocationType') == 'FlightStand':
+            stand_dels[t['flight']].append((t['finish'], t['drop']))
+
+    def flow_plan(fid, final, out, sta):
+        dels = sorted(stand_dels[fid])
+        segs = [(t, st) for t, st in sorted(stand_log[fid]) if st == final or any(ds == st and dt >= t for dt, ds in dels)]
+        if not segs or segs[-1][1] != final:
+            t0 = segs[-1][0] if segs else None
+            first = next((dt for dt, ds in dels if ds == final and dt >= t0), None) if segs else None
+            segs.append((first if first is not None else float('inf'), final) if segs else (float('-inf'), final))
+        inn = sta or min(out - 150 * 60, dels[0][0] - 120 if dels else float('inf'))
+        return segs, inn
+
+    def stand_at(segs, T):
+        cur = segs[0][1]
+        for t, st in segs:
+            if t <= T:
+                cur = st
+        return cur
     for s in snaps:
         exp = collections.defaultdict(list)
         for fid, f in flights.items():
@@ -313,8 +345,14 @@ if RUN_PAGE:
             if s['org'] != 'all' and not any(t['flight'] == fid and t['company'] == s['org'] for t in raw.values()):
                 continue
             inn = ts(f['ScheduledTimeOfArrival']) or out - 150 * 60
+            where = stand['Name']
+            if FLOW:
+                segs, inn = flow_plan(fid, stand['Name'], out, ts(f['ScheduledTimeOfArrival']))
+                where = stand_at(segs, s['t'])
             if inn <= s['t'] <= out + 300:
-                exp[stand['Name']].append(f['FlightNumber'])
+                exp[where].append((inn, f['FlightNumber']) if FLOW else f['FlightNumber'])
+        if FLOW:     # the aircraft that arrived first keeps a shared stand
+            exp = {st: [min(fl)[1]] for st, fl in exp.items()}
         got = {p['stand']: p['flight'] for p in s['planes']}
         for stand, fl in exp.items():
             if len(fl) > 1:
@@ -326,7 +364,7 @@ if RUN_PAGE:
                 logonly.append(f"{fmt(s['t'])} stand {stand}: {fl}")
             elif stand not in exp:
                 bad.append(f"{fmt(s['t'])} {s['org']} stand {stand}: page shows {fl}, not expected")
-    check('B', 'Planes on stand follow the arrival/departure rule', len(bad), len(snaps), '{bad} mismatches', bad)
+    check('B', 'Planes on stand follow the arrival/departure rule' + (' (with stand changes)' if FLOW else ''), len(bad), len(snaps), '{bad} mismatches', bad)
     check('B', 'Flights known only from the flight event logs', len(set(logonly)), len(snaps),
           '{bad} planes come from FlightCreated/Updated logs, not the Flights.csv snapshot', sorted(set(logonly)), warn_only=True)
     # B6 ULD piles, rebuilt from the raw rows. Full ULDs wait at a bank from creation until collected

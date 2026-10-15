@@ -109,7 +109,7 @@ button { cursor: pointer; }
 .tbtn:hover { border-color: rgba(0, 157, 224, .45); }
 .tbtn .badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--alert); color: #fff; font: 700 10.5px/18px var(--mono); padding: 0 5px; }
 .clock { font: 600 15px/1 var(--mono); letter-spacing: -.01em; }
-.clock small { display: block; font: 600 10.5px/1 var(--body); color: var(--muted); margin-top: 3px; text-align: right; }
+.clock small { display: block; font: 600 10.5px/1 var(--body); color: var(--muted); margin-top: 3px; text-align: right; white-space: nowrap; }
 .pop { position: absolute; top: 62px; z-index: 6; width: 320px; padding: 14px; display: grid; gap: 10px; }
 .pop h3 { margin: 0; font: 800 14px/1.2 var(--display); }
 .pop .raw { font: 500 11.5px/1.5 var(--mono); color: var(--muted); background: var(--chip); border-radius: 10px; padding: 8px 10px; overflow-wrap: anywhere; }
@@ -207,6 +207,27 @@ button { cursor: pointer; }
   .tracker { width: calc(100% - 490px); }
   .steps .step b { font-size: 11px; }
 }
+/* help: plain-language notes on how the replay is built */
+.help { position: absolute; z-index: 7; top: calc(76px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(86px + env(safe-area-inset-bottom, 0px)); width: 400px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; background: var(--glass-strong); overflow: hidden; }
+.help .hh { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.help .hh .hi { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; font: 800 19px/1 var(--display); flex: none; }
+.help .hh small { display: block; font: 700 11px/1 var(--display); letter-spacing: .08em; color: var(--accent-ink); margin-bottom: 3px; }
+.help .hh h2 { margin: 0; font: 800 18px/1.15 var(--display); }
+.help .hh .x { margin-left: auto; }
+.help .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.help .chips button { border: 0; border-radius: 99px; padding: 4px 10px; background: var(--chip); font: 700 12px/1.3 var(--display); color: var(--muted); }
+.help .chips button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.help .hb { overflow: auto; padding: 0 16px 16px; }
+.help section { padding: 12px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 4px; }
+.help section:last-child { border-bottom: 0; }
+.help section.on { background: var(--accent-soft); margin: 0 -16px; padding: 12px 16px; box-shadow: inset 3px 0 0 var(--accent); border-bottom-color: transparent; }
+.help h3 { margin: 0 0 4px; font: 800 14px/1.3 var(--display); }
+.help p { margin: 0 0 6px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.help p:last-child { margin-bottom: 0; }
+.help p b { color: var(--ink); font-weight: 700; }
+.help .tagx { display: inline-block; padding: 1px 7px; border-radius: 6px; background: var(--glass-strong); border: 1px solid var(--line); font: 700 11.5px/1.5 var(--display); color: var(--ink); }
+.help .tagx em { font-style: normal; font-family: var(--mono); color: var(--accent-ink); }
+.help .pills { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 6px; }
 .mselects { display: flex; gap: 6px; flex: none; }
 #areaSel, #orgSel { display: none; }
 @media (max-width: 1400px) { .orgseg { display: none; } #orgSel { display: block; } }
@@ -214,7 +235,7 @@ button { cursor: pointer; }
 @media (max-width: 760px) {
   .top { height: auto; flex-wrap: wrap; padding: 8px 10px; gap: 6px 6px; }
   .logo { order: 0; } .logo svg { width: 28px; height: 28px; } .logo b { font-size: 15px; }
-  .spacer { order: 1; } .clock { order: 2; font-size: 13px; } #wxBtn { order: 3; } #alBtn { order: 4; } #dnBtn { order: 5; }
+  .spacer { order: 1; } .clock { order: 2; font-size: 13px; } #wxBtn { order: 3; } #alBtn { order: 4; } #dnBtn { order: 5; } #helpBtn { order: 5; }
   .tbtn { height: 32px; min-width: 32px; padding: 0 7px; }
   #dnBtn span { display: none; }
   .mselects { order: 6; } .mselects .sel { height: 34px; max-width: 108px; font-size: 13px; }
@@ -222,6 +243,7 @@ button { cursor: pointer; }
   .search input { height: 34px; }
   .results { width: calc(100vw - 24px); left: auto; right: -2px; }
   .clock small { display: none; }
+  .help { z-index: 8; top: calc(104px + env(safe-area-inset-top, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); width: auto; max-width: none; }
   .sep { display: none; }
   .kpis { top: calc(104px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); }
   .kgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
@@ -272,8 +294,36 @@ button { cursor: pointer; }
     <button class="tbtn" type="button" id="wxBtn" aria-haspopup="true" aria-expanded="false" title="Weather at Heathrow"></button>
     <button class="tbtn" type="button" id="alBtn" aria-haspopup="true" aria-expanded="false" title="Alerts"><svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 13V8a5 5 0 0 1 10 0v5l1.5 1.5h-13zM7.5 16.2a1.8 1.8 0 0 0 3 0" stroke-linejoin="round"/></svg><span class="badge" id="alN" hidden></span></button>
     <button class="tbtn" type="button" id="dnBtn" title="Day and night: follows the real sun"></button>
+    <button class="tbtn" type="button" id="helpBtn" aria-controls="help" aria-expanded="false" title="How it works"><span style="font:800 16px/1 var(--display)">?</span></button>
     <div class="clock" id="clock">--:--<small>—</small></div>
   </header>
+  <aside class="glass help" id="help" aria-label="How it works" hidden>
+    <div class="hh"><span class="hi">?</span><div><small>HELP</small><h2>How it works</h2></div><button class="tbtn x" type="button" id="helpX" aria-label="Close">✕</button></div>
+    <div class="chips" id="helpChips"></div>
+    <div class="hb" id="helpBody">
+      <section id="h-planes" data-t="Planes"><h3>Planes</h3>
+        <p>A plane shows up at its <b>scheduled arrival</b>. If none is known, it comes <b>2½ h before departure</b>, or earlier if its first ULD reaches the stand before that. It leaves at departure (the estimated time when there is one).</p>
+        <p>If the flight <b>changed stand</b>, the plane moves with it. Only one plane fits on a stand: the one that got there first stays until it leaves.</p>
+        <p>Planes use the runway the <b>real wind</b> decides and taxi on the official taxiways.</p></section>
+      <section id="h-ulds" data-t="ULDs at stands"><h3>ULDs at stands</h3>
+        <p>Delivered ULDs stay at the stand <b>until their flight leaves</b> (at most 3 h, or 45 min if the flight is unknown). Sometimes they wait without a plane, and a tag says why:</p>
+        <p><span class="tagx">For UA26 <em>aircraft on 246L</em></span> dropped at the flight's old stand</p>
+        <p><span class="tagx">For EI153 <em>aircraft due 07:20</em></span> the plane has not arrived yet</p>
+        <p>A ULD counts as <b>empty</b> when it was picked up from an empty-ULD store; everything else is <b>full</b>. Full ULDs wait at their bank from when they are created until a tug collects them.</p></section>
+      <section id="h-tugs" data-t="Tugs"><h3>Tugs</h3>
+        <p>The colour shows what the tug is doing:</p><div class="pills" id="helpPills"></div>
+        <p>Tugs follow the system log. Between two log entries they drive along the service roads, so a tug can be a <b>minute or two behind</b> the real moment.</p></section>
+      <section id="h-counters" data-t="Counters"><h3>Counters</h3>
+        <p><b>ULDs delivered</b>: dropped today up to now. <b>Flights served</b>: flights that got at least one ULD.</p>
+        <p><b>On-time delivery</b>: share delivered before their latest finish time. <b>Late</b>: delivered after it. <b>Urgent</b>: urgent ULDs delivered. <b>Escalated</b>: ULDs made urgent after their order was created.</p></section>
+      <section id="h-map" data-t="Map"><h3>Map</h3>
+        <p><b>Real</b>: stand and taxiway positions (from the official Heathrow chart), the weather (Heathrow reports every 30 min) and day and night (the real sunrise and sunset).</p>
+        <p><b>Drawn for looks</b>: the runway position, the buildings and the service roads.</p></section>
+      <section id="h-data" data-t="Data"><h3>Data</h3>
+        <p>Everything comes from the <b>GHS export</b>: orders, ULDs, drivers, flights and their logs. Nothing is made up; where a time is missing, the rules above fill it in.</p>
+        <p>A checker compares the page with the raw export: counters, tug status, planes on stand and ULD piles.</p></section>
+    </div>
+  </aside>
   <div class="pop glass" id="wxPop" hidden></div>
   <div class="pop glass" id="alPop" hidden></div>
 
@@ -322,6 +372,14 @@ button { cursor: pointer; }
 (() => {
 'use strict';
 const D = window.REPLAY_DATA;
+// Flow CTRL's own hall layout (the other views keep theirs): United gets a bay on the hall's north-east
+// corner with a wide loading apron and a longer service road where its tugs can wait.
+const FLOW_LAYOUT = {
+  docks: { 'United Bank 1': { x: 733, y: 243, face: 'n' }, 'EI Bank': { x: 752, y: 375, face: 'e' } },
+  bay: { x0: 712, x1: 754, y0: 243, y1: 282 },
+  roads: [[[690, 202], [780, 202]]],
+  dropRoad: r => r[0][1] === 240 && r[1][1] === 240,     // the main view's short spur is replaced by the road above
+};
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 // status colours for the tugs: full runs in brand blue like full ULDs, empty runs in navy
 const C = {
@@ -349,7 +407,10 @@ const hall = D.locations.filter(l => l.type !== 'FlightStand');
 const chutes = hall.filter(l => l.type === 'Chute').sort((a, b) => a.name.localeCompare(b.name));
 const HALL = ML.hall;
 // bank doors along the east face of the T1 baggage hall; can stores are yards across the road
-chutes.forEach((l, i) => { l.hall = true; l.x = HALL.x1; l.y = HALL.y0 + 34 + i * 40; });
+// doors come from the layout (face 'e' east or 'n' north); a bank not listed gets a slot on the east face
+chutes.forEach((l, i) => { const d = FLOW_LAYOUT.docks[l.name]; l.hall = true; l.face = d ? d.face : 'e'; l.x = d ? d.x : HALL.x1; l.y = d ? d.y : HALL.y0 + 34 + i * 40; });
+const doorOut = l => l.face === 'n' ? [0, -1] : [1, 0];   // outward from the hall
+const doorAlong = l => l.face === 'n' ? [1, 0] : [0, 1];  // along the hall face
 hall.filter(l => l.type !== 'Chute').forEach((l, i) => {
   l.hall = true; l.yard = { x0: 800, x1: 872, y0: 300 + i * 84, y1: 366 + i * 84 };
   l.x = 800; l.y = l.yard.y0 + 33;
@@ -367,7 +428,7 @@ function layoutStands(list) { stands = list; }
 D.locations.forEach(l => l.label = shortName(l));
 
 // ---------- road network: axis-aligned road segments, shortest paths between access points ----------
-const ROADS = ML.roads.map(([a, b]) => ({ a, b, v: a[0] === b[0] }));
+const ROADS = ML.roads.filter(r => !FLOW_LAYOUT.dropRoad(r)).concat(FLOW_LAYOUT.roads).map(([a, b]) => ({ a, b, v: a[0] === b[0] }));
 function project(x, y) {
   let best = null;
   ROADS.forEach((r, i) => {
@@ -677,6 +738,27 @@ function wxAt(T) {
 }
 const compass = d => d == null ? 'variable' : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(d / 45) % 8];
 
+// ---------- where each flight's aircraft is ----------
+// A flight can move stand during the day (the GHS log records every change). The aircraft follows those changes,
+// but only stands the data backs up: the final stand, or one where this flight's ULDs were delivered after the change.
+// With no STA the aircraft arrives 150 min before departure, or just before its first ULD reaches the stand if that is earlier.
+const delsByFlight = new Map();
+D.tasks.forEach(t => { if (t.flight && t.del && byId[t.to]?.type === 'FlightStand') { if (!delsByFlight.has(t.flight)) delsByFlight.set(t.flight, []); delsByFlight.get(t.flight).push([t.del, t.to]); } });
+D.flights.forEach(f => {
+  const dels = (delsByFlight.get(f.id) || []).sort((a, b) => a[0] - b[0]);
+  const segs = (f.standLog || []).map(([t, st]) => [typeof t === 'number' ? t : Date.parse(t) / 1000, st])
+    .filter(([t, st]) => st === f.stand || dels.some(([dt, ds]) => ds === st && dt >= t));
+  if (!segs.length || segs[segs.length - 1][1] !== f.stand) {
+    const t0 = segs.length ? segs[segs.length - 1][0] : -Infinity, first = dels.find(([dt, ds]) => ds === f.stand && dt >= t0);
+    segs.push([segs.length ? (first ? first[0] : Infinity) : -Infinity, f.stand]);
+  }
+  segs[0][0] = -Infinity;
+  f._stands = segs;
+  const out = f.etd || f.std;
+  f._inn = f.sta || (out ? Math.min(out - 150 * 60, dels.length ? dels[0][0] - 120 : Infinity) : null);
+});
+const standAt = (f, T) => { let cur = f._stands[0][1]; for (const [t, st] of f._stands) if (t <= T) cur = st; return cur; };
+
 // ---------- scene state: the same rules as the other views ----------
 let layoutKey = null;
 function sceneState(T) {
@@ -684,11 +766,11 @@ function sceneState(T) {
   if (key !== layoutKey) { layoutKey = key; layoutStands(relevantStands(dayStart(T))); groundDirty = true; }
   const planeAt = new Map();
   D.flights.forEach(f => {
-    const l = byId[f.stand]; if (!l || l.x == null || l.hall) return;
     const out = f.etd || f.std; if (!out) return;
-    const inn = f.sta || out - 150 * 60;
+    const inn = f._inn, l = byId[standAt(f, T)]; if (!l || l.x == null || l.hall) return;
     if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
-    if (T >= inn && T <= out + 5 * 60) planeAt.set(l.id, f);
+    const had = planeAt.get(l.id);   // two flights booked on one stand: the aircraft already there keeps it until it leaves
+    if (T >= inn && T <= out + 5 * 60 && (!had || had._inn > inn)) planeAt.set(l.id, f);
   });
   const piles = new Map();
   const add = (l, t, a = 1) => { if (!piles.has(l.id)) piles.set(l.id, []); piles.get(l.id).push([t, a]); };
@@ -876,12 +958,12 @@ function taxiPaths(l, dirIn, dirOut) {
 // a flight's movements: approach, roll-out, taxi in, on stand, pushback, taxi out, take-off
 const TAXI = 9, VTD = 70, VEXIT = 12;
 function flightPlan(f) {
-  const l = byId[f.stand]; if (!l || !l.nose) return null;
   const out = f.etd || f.std; if (!out) return null;
-  const inn = f.sta || out - 150 * 60;
+  const inn = f._inn, lIn = byId[standAt(f, inn)], l = byId[standAt(f, out)];
+  if (!l || !l.nose || !lIn || !lIn.nose) return null;
   if (f._plan && f._plan.inn === inn && f._plan.out === out) return f._plan;
   const dirIn = rwyDir(inn - 600), dirOut = rwyDir(out + 300);
-  const p = taxiPaths(l, dirIn, dirOut);
+  const p = { ...taxiPaths(l, dirIn, dirOut), inC: taxiPaths(lIn, dirIn, dirOut).inC };
   const tExit = inn - p.inC.len / TAXI, rollD = Math.abs(p.ri.td - p.ri.exit), rollT = 2 * rollD / (VTD + VEXIT);
   const tTouch = tExit - rollT, tApp = tTouch - 28;
   const tPushEnd = out + 75, tTaxi = tPushEnd + 15, tHold = tTaxi + p.outC.len / TAXI, tRoll = tHold + 15;
@@ -900,7 +982,10 @@ function planePose(pl, T) {
     return { x: ri.td + pl.dirIn * s, y: RWY.y, z: 0, yaw: pl.dirIn > 0 ? 0 : Math.PI, gear: 1, phase: 'Landing' };
   }
   if (T < pl.inn) { const p = along(inC, (T - pl.tExit) * TAXI); return { ...p, z: 0, gear: 1, phase: 'Taxi in' }; }
-  if (T < pl.out) return { x: S[0], y: S[1], z: 0, yaw: hyaw, gear: 1, phase: 'On stand' };
+  if (T < pl.out) {     // on stand; if the flight was moved, the aircraft is at the stand it had at this moment
+    const ls = byId[standAt(pl.f, T)], q = ls && ls.nose && ls !== l ? standFrame(ls)(0, 2) : S;
+    return { x: q[0], y: q[1], z: 0, yaw: ls && ls.nose ? Math.atan2(-ls.h[1], ls.h[0]) : hyaw, gear: 1, phase: 'On stand', l: ls && ls.nose ? ls : l };
+  }
   if (T < pl.tTaxi) {    // pushback straight out of the stand, then turned onto the taxilane
     const t = clamp((T - pl.out) / 60, 0, 1), s = ease(t) * (pl.pushLen + Math.hypot(pl.L[0] - pl.entry[0], pl.L[1] - pl.entry[1]));
     const x = S[0] - l.h[0] * s, y = S[1] - l.h[1] * s;
@@ -975,6 +1060,7 @@ function paintGround(active) {
   // can stores and the dock in front of the bank doors
   yards.forEach(l => { const y = l.yard; g.fillStyle = '#dde2e6'; rr(y.x0, y.y0, y.x1 - y.x0, y.y1 - y.y0, 3); g.fill(); g.setLineDash([3, 2]); g.strokeStyle = 'rgba(60,80,100,.45)'; g.lineWidth = .6; g.stroke(); g.setLineDash([]); });
   g.fillStyle = '#d9dfe4'; g.fillRect(HALL.x1, HALL.y0, 24, HALL.y1 - HALL.y0);
+  chutes.filter(l => l.face === 'n').forEach(l => { g.fillRect(l.x - 26, l.y - 47, 52, 47); g.fillStyle = 'rgba(0,118,168,.08)'; g.fillRect(l.x - 24, l.y - 45, 48, 41); g.fillStyle = '#d9dfe4'; });   // loading apron at the north door
   gtex.needsUpdate = true;
 }
 
@@ -1006,9 +1092,15 @@ nightMats.push([mat.glass, .95]);
     const g = new THREE.ExtrudeGeometry(sh, { depth: x1 - x0 - 4, bevelEnabled: false });
     const m = new THREE.Mesh(g, [mat.hallRoof, mat.hallRoof]); m.rotation.y = Math.PI / 2; m.position.set(x0 + 2, h, y + 12); m.castShadow = true; world.add(m);
   }
+  { const b = FLOW_LAYOUT.bay, bay = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0, 18, b.y1 - b.y0), mat.hall);
+    bay.position.set((b.x0 + b.x1) / 2, 9, (b.y0 + b.y1) / 2); bay.castShadow = bay.receiveShadow = true; world.add(bay);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0 + .6, .8, b.y1 - b.y0 + .6), mat.roof); roof.position.set((b.x0 + b.x1) / 2, 18.4, (b.y0 + b.y1) / 2); world.add(roof);
+    const fascia = new THREE.Mesh(new THREE.BoxGeometry(b.x1 - b.x0, 1.6, .8), mat.hallRoof); fascia.position.set((b.x0 + b.x1) / 2, 17.4, b.y0 - .4); world.add(fascia); }
   chutes.forEach(l => {
-    const d = new THREE.Mesh(new THREE.BoxGeometry(.6, 13, 16), mat.door); d.position.set(x1 + .2, 6.5, l.y); world.add(d);
-    const f = new THREE.Mesh(new THREE.BoxGeometry(.8, 1.2, 18), mat.accent); f.position.set(x1 + .3, 13.6, l.y); world.add(f);
+    const north = l.face === 'n', d = new THREE.Mesh(new THREE.BoxGeometry(.6, 13, 16), mat.door), f = new THREE.Mesh(new THREE.BoxGeometry(.8, 1.2, 18), mat.accent);
+    if (north) { d.rotation.y = f.rotation.y = Math.PI / 2; d.position.set(l.x, 6.5, l.y - .2); f.position.set(l.x, 13.6, l.y - .3); }
+    else { d.position.set(x1 + .2, 6.5, l.y); f.position.set(x1 + .3, 13.6, l.y); }
+    world.add(d, f);
   });
 }
 // the sign on Terminal 2A's roof
@@ -1247,7 +1339,7 @@ function setInst(im, n, x, y, z, yaw = 0, sc = US) { _q.setFromEuler(_e.set(0, y
 
 // pile slots (3D spacing) at banks, can stores and stands
 function slot(l, i) {
-  if (l.type === 'Chute') { const c = i % 3, r = Math.floor(i / 3) % 4, k = Math.floor(i / 12); return [HALL.x1 + 5 + c * 6, l.y - 9 + r * 6, k * UH]; }
+  if (l.type === 'Chute') { const n = l.face === 'n' ? 6 : 4, c = i % 3, r = Math.floor(i / 3) % n, k = Math.floor(i / (3 * n)), [ox, oy] = doorOut(l), [ax, ay] = doorAlong(l), u = 5 + c * 6, v = (r - (n - 1) / 2) * 6; return [l.x + ox * u + ax * v, l.y + oy * u + ay * v, k * UH]; }
   if (l.yard) { const y = l.yard, c = i % 10, r = Math.floor(i / 10) % 9, k = Math.floor(i / 90); return [y.x0 + 7 + c * 6.4, y.y0 + 7 + r * 6.4, k * UH]; }
   const F = standFrame(l), [x, y] = F(24 + (i % 16 >= 8 ? 6.5 : 0), 4 + (i % 8) * 6);
   return [x, y, i >= 16 ? UH : 0];
@@ -1269,7 +1361,7 @@ allStands.forEach(l => {
 });
 hall.forEach(l => {
   const m = l.yard ? new THREE.Mesh(new THREE.BoxGeometry(l.yard.x1 - l.yard.x0, 4, l.yard.y1 - l.yard.y0), pickMat) : new THREE.Mesh(new THREE.BoxGeometry(24, 14, 30), pickMat);
-  if (l.yard) m.position.set((l.yard.x0 + l.yard.x1) / 2, 2, (l.yard.y0 + l.yard.y1) / 2); else m.position.set(HALL.x1 + 10, 7, l.y);
+  if (l.yard) m.position.set((l.yard.x0 + l.yard.x1) / 2, 2, (l.yard.y0 + l.yard.y1) / 2); else { const [ox, oy] = doorOut(l); m.position.set(l.x + ox * 12, 7, l.y + oy * 12); if (l.face === 'n') m.rotation.y = Math.PI / 2; }
   m.userData.pick = { kind: 'bank', id: l.id }; scene.add(m); pickables.push(m);
 });
 
@@ -1310,7 +1402,7 @@ function frameBox(pts, opt = {}) {
   if (opt.az != null) goal.az = opt.az; if (opt.el != null) goal.el = opt.el;
 }
 const AREAS = [
-  ['hall', 'Baggage hall', () => frameBox([[HALL.x0, HALL.y0], [880, HALL.y1 + 120], [880, HALL.y0 - 40]], { min: 260, k: 1 })],
+  ['hall', 'Baggage hall', () => frameBox([[HALL.x0, HALL.y0], [880, HALL.y1 + 100], [880, 190], [690, 190]], { min: 260, k: 1 })],
   ['t2a', 'T2A', () => frameBox(stands.filter(l => l.nose && l.x < 990).map(l => l.nose).concat([[600, 600]]), { min: 380 })],
   ['t2b', 'T2B pier', () => frameBox(stands.filter(l => l.nose && l.x >= 990).map(l => l.nose).concat([[1100, 300], [1100, 600]]), { min: 420 })],
   ['rwy', 'Runway', () => frameBox([[RWY.x0 + 300, RWY.y], [RWY.x1 - 300, RWY.y]], { min: 900, k: .8, el: .55 })],
@@ -1383,11 +1475,11 @@ function select(kind, id, glide) {
 function posOf(s) {
   if (!s) return null;
   if (s.kind === 'tug') { const d = drvById[s.id]; return d?._p ? { x: d._p.x, y: d._p.y, z: 4, r: 6 } : null; }
-  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[f.stand]; if (l?.nose && lastRes?.planeAt.get(l.id)?.id === f.id) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
+  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[standAt(f, T)]; if (l?.nose && lastRes?.planeAt.get(l.id)?.id === f.id) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
   const l = byId[s.id]; if (!l) return null;
   if (s.kind === 'stand' && l.nose) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 26 }; }
   if (l.yard) return { x: (l.yard.x0 + l.yard.x1) / 2, y: (l.yard.y0 + l.yard.y1) / 2, z: 6, r: 40 };
-  if (l.type === 'Chute') return { x: HALL.x1 + 10, y: l.y, z: 10, r: 14 };
+  if (l.type === 'Chute') { const [ox, oy] = doorOut(l); return { x: l.x + ox * 12, y: l.y + oy * 12, z: 10, r: 14 }; }
   return l.x != null ? { x: l.x, y: l.y, z: 4, r: 12 } : null;
 }
 
@@ -1458,11 +1550,11 @@ function updateWorld(T, res, dt) {
   D.flights.forEach(f => {
     if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
     const out = f.etd || f.std; if (!out) return;
-    const inn = f.sta || out - 150 * 60;
+    const inn = f._inn;
     if (T < inn - 1800 || T > out + 1800) return;
     const pl = flightPlan(f); if (!pl) return;
     const ps = planePose(pl, T); if (!ps) return;
-    if (ps.phase === 'On stand' && res.planeAt.get(pl.l.id) && res.planeAt.get(pl.l.id).id !== f.id) return;   // one plane per stand, as in the data views
+    if (ps.phase === 'On stand' && res.planeAt.get(ps.l.id) && res.planeAt.get(ps.l.id).id !== f.id) return;   // one plane per stand, as in the data views
     live.add(f.id);
     let P = planeObjs.get(f.id);
     if (!P) { const g = makePlane(f.no); g.userData.pick = { kind: 'flight', id: f.id }; scene.add(g); P = { g, f }; planeObjs.set(f.id, P); }
@@ -1511,6 +1603,12 @@ function updateWorld(T, res, dt) {
     const k = l.yard ? 1 : vp, [ax, ay] = slot(l, 0);
     list.slice(0, cap).forEach(([t], i) => { const [x, y, z] = slot(l, i); putULD(t, ax + (x - ax) * k, ay + (y - ay) * k, z * k, yaw, k); });
     if (list.length > cap) { const [x, y] = slot(l, cap - 1); label('more' + id, x, y, 6, `+${list.length - cap}`, 'soft', 6); }
+    // ULDs dropped at a stand other than where their aircraft is: say which flight they are for
+    if (l.nose) {
+      const away = [...new Set(list.map(([t]) => t.full && t.flight).filter(Boolean))].map(fid => flights[fid])
+        .filter(f => f && res.planeAt.get(id)?.id !== f.id && (standAt(f, T) !== id || T < f._inn));
+      if (away.length) { const [x, y] = slot(l, 0); label('away' + id, x, y, 9 * k, away.map(f => `For ${esc(f.no)} <em>${standAt(f, T) !== id ? 'aircraft on ' + esc(byId[standAt(f, T)]?.name ?? '—') : 'aircraft due ' + fmtT(f._inn)}</em>`).join('<br>'), 'soft', 3); }
+    }
   });
   // tugs with their dolly trains
   const seen = new Set();
@@ -1553,7 +1651,7 @@ function updateWorld(T, res, dt) {
     label('fl' + f.id, P.g.position.x, P.g.position.z, P.g.position.y + 12, `${esc(f.no)} <em>${esc(tag)}</em>`, isSel ? 'sel' : 'soft', isSel ? 0 : 2);
   });
   // signs
-  chutes.forEach(l => label('bank' + l.id, HALL.x1 + 1, l.y, 17, esc(l.label), sel?.kind === 'bank' && sel.id === l.id ? 'sel' : 'sign', sel?.id === l.id ? 0 : 4));
+  chutes.forEach(l => label('bank' + l.id, l.x + doorOut(l)[0], l.y + doorOut(l)[1], 17, esc(l.label), sel?.kind === 'bank' && sel.id === l.id ? 'sel' : 'sign', sel?.id === l.id ? 0 : 4));
   yards.forEach(l => label('yard' + l.id, (l.yard.x0 + l.yard.x1) / 2, l.yard.y0, 3, esc(l.label), sel?.id === l.id ? 'sel' : 'sign', sel?.id === l.id ? 0 : 4));
   label('hall', (HALL.x0 + HALL.x1) / 2, HALL.y0, 34, 'T1 BAGGAGE HALL', 'sel', 4);
   if (sel?.kind === 'stand') { const l = byId[sel.id], [x, y] = standFrame(l)(0, 46); label('stand' + l.id, x, y, 2, `Stand ${esc(l.name)}`, 'sel', 0); }
@@ -1640,7 +1738,7 @@ function renderPanels(T, res, force) {
   $('dnBtn').innerHTML = { auto: `${WXI.auto}<span>Auto</span>`, day: `${WXI.sun}<span>Day</span>`, night: `${WXI.moon}<span>Night</span>` }[dnMode];
   if (!$('wxPop').hidden) renderWx(T); if (!$('alPop').hidden) renderAlerts(T, al);
   // a selected flight lets go when the replay moves well away from it (another day, or long gone)
-  if (sel?.kind === 'flight') { const f = flights[sel.id], out = f && (f.etd || f.std), inn = f && (f.sta || out - 150 * 60); if (!f || T < inn - 3 * 3600 || T > out + 3600) { sel = null; follow = null; } }
+  if (sel?.kind === 'flight') { const f = flights[sel.id], out = f && (f.etd || f.std), inn = f && f._inn; if (!f || T < inn - 3 * 3600 || T > out + 3600) { sel = null; follow = null; } }
   // default selection: the first tug doing something
   if (!sel || (sel.kind === 'tug' && !inOrg(drvById[sel.id]?.company))) {
     const s = res.states.find(s => !['off', 'idle'].includes(s.st.k)) || res.states.find(s => s.st.k !== 'off');
@@ -1655,7 +1753,7 @@ const head = (icon, eye, name, sub, extra = '') => `<div class="dh"><span class=
 function flightInfo(f, T) {
   const ts = D.tasks.filter(t => t.flight === f.id && inOrg(t.company));
   const del = ts.filter(t => t.del && t.del <= T), late = del.filter(isLate);
-  const P = planeObjs.get(f.id), out = f.etd || f.std, inn = f.sta || out - 150 * 60;
+  const P = planeObjs.get(f.id), out = f.etd || f.std, inn = f._inn;
   const phase = P?.ps?.phase || (T < inn ? 'Inbound' : T > out ? 'Departed' : 'On stand');
   const tugs = [...new Set(ts.map(t => t.o.driver).filter(Boolean))].map(id => drvById[id]?.tag).filter(Boolean);
   return { ts, del, late, phase, tugs, out, inn, full: del.filter(t => t.full).length, empty: del.filter(t => !t.full).length, urgent: ts.filter(t => isUrgent(t, T) && !(t.del && t.del <= T)).length };
@@ -1685,7 +1783,7 @@ function renderDetail(T, res) {
         <span>Flight</span><strong>${f ? `<a href="#" data-fl="${f.id}" style="color:var(--accent-ink)">${esc(f.no)}</a>${left != null ? ` · ${left >= 0 ? 'STD in ' + left + ' min' : 'departed'}` : ''}` : '—'}</strong>
         <span>Trips today</span><strong class="m">${done.length}</strong></div>`;
   } else if (sel.kind === 'flight') {
-    const f = flights[sel.id], l = byId[f.stand], I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
+    const f = flights[sel.id], l = byId[standAt(f, T)], I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
     const ph = { 'On stand': ['var(--ok-soft)', 'var(--ok)'], 'Pushback': ['var(--info-soft)', 'var(--info)'] }[I.phase] || ['var(--chip)', 'var(--muted)'];
     el.innerHTML = head(`<span style="color:${TAILC[String(f.no).slice(0, 2)] || 'var(--accent)'}">${ICON.plane}</span>`, airlineOf(f.no), esc(f.no), `${fmtD(f.etd || f.std)} · stand ${esc(l?.name ?? '—')} · ${esc(f.status || 'Scheduled')}`) + `
       <div class="state">${pill(I.phase, ph[0], ph[1])}${I.urgent ? pill(`${I.urgent} urgent`, 'var(--alert)', '#fff') : ''}<span>${left >= 0 ? `Departs in ${left} min` : `Departed ${-left} min ago`}</span></div>
@@ -1741,7 +1839,7 @@ function renderTracker(T, res) {
   if (f) {
     const I = flightInfo(f, T), dels = I.ts.filter(t => t.del).map(t => t.del).sort((a, b) => a - b);
     $('trkTitle').textContent = `Turnaround · ${f.no}`;
-    $('trkHead').textContent = `${fmtD(I.out)} · stand ${byId[f.stand]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
+    $('trkHead').textContent = `${fmtD(I.out)} · stand ${byId[standAt(f, T)]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
     $('steps').innerHTML = steps([['On stand', I.inn, STEPI.stand], ['First ULD', dels[0], STEPI.box], ['Last ULD', dels[dels.length - 1], STEPI.ok], ['Pushback', I.out, STEPI.go]], T, false);
     const pending = I.ts.filter(t => !(t.del && t.del <= T) && !(t.can && t.can <= T)).length;
     $('tsum').innerHTML = `<span><b>${I.del.length}</b> of ${I.ts.length} ULDs delivered</span><span><b>${pending}</b> still to come</span><span style="color:${I.late.length ? 'var(--alert)' : 'inherit'}"><b>${I.late.length}</b> late</span><span>${I.phase}</span>`;
@@ -1785,7 +1883,7 @@ function renderTable(T, res) {
     html = flightsToday.map(f => {
       const I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
       const st = I.phase === 'On stand' ? (left < 20 ? pill('Closing', 'var(--alert-soft)', 'var(--alert)') : pill('On stand', 'var(--ok-soft)', 'var(--ok)')) : I.phase === 'Inbound' ? pill('Inbound', 'var(--chip)', 'var(--muted)') : pill(I.phase, 'var(--info-soft)', 'var(--info)');
-      return `<button type="button" class="row ${sel?.id === f.id ? 'sel' : ''}" data-k="flight" data-id="${f.id}"><span class="id">${esc(f.no)}<small>stand ${esc(byId[f.stand]?.name ?? '—')}</small></span><span class="w">${I.del.length} ULD delivered${I.late.length ? ` · ${I.late.length} late` : ''} · STD ${fmtT(I.out)}</span>${st}<span class="n">${left >= 0 ? left + 'm' : 'gone'}</span></button>`;
+      return `<button type="button" class="row ${sel?.id === f.id ? 'sel' : ''}" data-k="flight" data-id="${f.id}"><span class="id">${esc(f.no)}<small>stand ${esc(byId[standAt(f, T)]?.name ?? '—')}</small></span><span class="w">${I.del.length} ULD delivered${I.late.length ? ` · ${I.late.length} late` : ''} · STD ${fmtT(I.out)}</span>${st}<span class="n">${left >= 0 ? left + 'm' : 'gone'}</span></button>`;
     }).join('') || '<div class="empty">No more departures today.</div>';
   }
   $('rows').innerHTML = html;
@@ -1814,6 +1912,21 @@ function renderAlerts(T, al) {
   }).join('') : '<div class="note">No urgent or overdue ULDs right now.</div>');
   $('alPop').querySelectorAll('[data-o]').forEach(b => b.onclick = () => { const o = orders.get(b.dataset.o); if (o.driver && drvById[o.driver]) select('tug', o.driver, true); else if (o.from?.nose || o.from) select(o.from.type === 'FlightStand' ? 'stand' : 'bank', o.from.id, true); $('alPop').hidden = true; });
 }
+// ---------- help panel ----------
+(() => {
+  const box = $('help'), btn = $('helpBtn'), secs = [...box.querySelectorAll('section')];
+  $('helpChips').innerHTML = secs.map(x => `<button type="button" data-s="${x.id}" aria-pressed="false">${esc(x.dataset.t)}</button>`).join('');
+  $('helpPills').innerHTML = [{ k: 'dh' }, { k: 'atpick' }, { k: 'carry', o: { full: true } }, { k: 'carry', o: { full: false } }, { k: 'atdrop', o: { full: true } }, { k: 'assigned' }, { k: 'idle' }, { k: 'off' }]
+    .map(st => { const [t, bg, fg] = statusStyle(st); return pill(t, bg, fg); }).join('');
+  const mark = id => { secs.forEach(x => x.classList.toggle('on', x.id === id)); box.querySelectorAll('.chips button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.s === id))); };
+  const show = (on, id) => { box.hidden = !on; btn.setAttribute('aria-expanded', String(on)); if (on && id) { mark(id); $(id).scrollIntoView({ block: 'start' }); } };
+  btn.onclick = () => show(box.hidden, box.hidden ? 'h-ulds' : null);
+  $('helpX').onclick = () => { show(false); btn.focus(); };
+  $('helpChips').onclick = e => { const b = e.target.closest('button'); if (b) { mark(b.dataset.s); $(b.dataset.s).scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' }); } };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !box.hidden) show(false); });
+  window.openHelp = id => show(true, id);
+})();
+
 $('wxBtn').onclick = () => togglePop('wxPop', $('wxBtn'), () => renderWx(T));
 $('alBtn').onclick = () => togglePop('alPop', $('alBtn'), () => renderAlerts(T, alertsAt(T)));
 $('dnBtn').onclick = () => { dnMode = { auto: 'day', day: 'night', night: 'auto' }[dnMode]; store.set('flow-dn', dnMode); renderPanels(T, lastRes, true); };
@@ -1836,7 +1949,7 @@ function showHits() {
 }
 function pickHit(i) {
   const h = hits[i]; if (!h) return;
-  if (h[0] === 'flight') { const f = flights[h[1]], out = f.etd || f.std; if (Math.abs(out - T) > 3 * 3600) T = (f.sta || out - 150 * 60) + 20 * 60; }
+  if (h[0] === 'flight') { const f = flights[h[1]], out = f.etd || f.std; if (Math.abs(out - T) > 3 * 3600) T = f._inn + 20 * 60; }
   select(h[0], h[1], true); $('results').hidden = true; $('q').blur();
 }
 $('q').addEventListener('input', e => { hits = searchAll(e.target.value); hitI = 0; showHits(); });
@@ -1983,6 +2096,20 @@ window.apronDebug = {
     };
   },
   range: () => ({ tMin, tMax }),
+  // every full ULD delivered to a stand: is its aircraft there, or does the pile say where the aircraft is?
+  planeCheck() {
+    const c = { present: 0, labelled: 0, due: 0, missing: [], moved: [] }, o = org; org = 'all';
+    D.tasks.forEach(t => {
+      if (!t.flight || !t.del || byId[t.to]?.type !== 'FlightStand' || t.o.vd == null) return;
+      const at = Math.max(t.o.vd, t.del) + 30, f = flights[t.flight], pf = sceneState(at).planeAt.get(t.to);
+      if (pf && pf.id === f.id) c.present++;
+      else if (standAt(f, at) !== t.to) c.labelled++;
+      else if (at < f._inn) c.due++;
+      else c.missing.push([f.no, byId[t.to].name, at, pf ? pf.no : null]);
+    });
+    D.flights.forEach(f => { if (f._stands.length > 1) c.moved.push([f.no, f.etd || f.std, f._stands.map(([t, s]) => [isFinite(t) ? t : null, byId[s]?.name])]); });
+    org = o; return c;
+  },
   // aircraft routes for checking: [stand name, route in, route out] for both runway directions
   taxiRoutes: () => allStands.filter(l => l.nose).flatMap(l => [-1, 1].map(d => { const p = taxiPaths(l, d, d); return [l.name, d, p.inC.pts, p.outC.pts]; })),
 };

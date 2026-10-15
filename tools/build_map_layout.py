@@ -129,6 +129,7 @@ roads = [
     [[1060, 40], [1060, 800]],                   # T2B west face
     [[1128, 40], [1128, 800]],                   # T2B east face
     [[1420, 40], [1420, 800]],                   # remote 251-258 line
+    [[690, 240], [780, 240]],                    # spur to the United bank door on the hall's north face
 ]
 # ---- taxiway centre lines: the yellow ribbons on the chart, traced along one edge, joined into a graph ----
 def is_yellow(f): return f and abs(f[0] - .97) < .03 and abs(f[1] - .905) < .03 and abs(f[2] - .215) < .03
@@ -208,8 +209,10 @@ taxi = {'nodes': [[round(nodes[i][0], 1), round(nodes[i][1], 1)] for i in used],
 
 # T1 baggage hall: a dock face on the east side of T1 with one door per bank / store
 hall = {'x0': 690, 'x1': 752, 'y0': 280, 'y1': 470}
+# bank doors: United on the north face (own spur road, its own queue), Menzies' EI bank mid east face
+docks = {'United Bank 1': {'x': 721, 'y': 280, 'face': 'n'}, 'EI Bank': {'x': 752, 'y': 375, 'face': 'e'}}
 layout = {'source': 'UK AIP AD 2-EGLL-2-7 (Heathrow T1/T2 ground movement chart)', 'units': 'metres', 'stands': stands,
-          'buildings': buildings, 'roads': roads, 'hall': hall, 'taxi': taxi}
+          'buildings': buildings, 'roads': roads, 'hall': hall, 'docks': docks, 'taxi': taxi}
 out = os.path.join(os.path.dirname(__file__), '..', 'data', 'map_layout.js')
 open(out, 'w').write('window.MAP_LAYOUT=' + json.dumps(layout, separators=(',', ':')) + ';\n')
 print(len(stands), 'stands,', len(buildings), 'buildings,', sum(len(b) for b in buildings), 'points,', len(taxi['nodes']), 'taxi nodes,', len(taxi['edges']), 'taxi edges →', os.path.relpath(out))
