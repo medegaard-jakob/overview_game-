@@ -688,6 +688,27 @@ function wxAt(T) {
 }
 const compass = d => d == null ? 'variable' : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(d / 45) % 8];
 
+// ---------- where each flight's aircraft is ----------
+// A flight can move stand during the day (the GHS log records every change). The aircraft follows those changes,
+// but only stands the data backs up: the final stand, or one where this flight's ULDs were delivered after the change.
+// With no STA the aircraft arrives 150 min before departure, or just before its first ULD reaches the stand if that is earlier.
+const delsByFlight = new Map();
+D.tasks.forEach(t => { if (t.flight && t.del && byId[t.to]?.type === 'FlightStand') { if (!delsByFlight.has(t.flight)) delsByFlight.set(t.flight, []); delsByFlight.get(t.flight).push([t.del, t.to]); } });
+D.flights.forEach(f => {
+  const dels = (delsByFlight.get(f.id) || []).sort((a, b) => a[0] - b[0]);
+  const segs = (f.standLog || []).map(([t, st]) => [typeof t === 'number' ? t : Date.parse(t) / 1000, st])
+    .filter(([t, st]) => st === f.stand || dels.some(([dt, ds]) => ds === st && dt >= t));
+  if (!segs.length || segs[segs.length - 1][1] !== f.stand) {
+    const t0 = segs.length ? segs[segs.length - 1][0] : -Infinity, first = dels.find(([dt, ds]) => ds === f.stand && dt >= t0);
+    segs.push([segs.length ? (first ? first[0] : Infinity) : -Infinity, f.stand]);
+  }
+  segs[0][0] = -Infinity;
+  f._stands = segs;
+  const out = f.etd || f.std;
+  f._inn = f.sta || (out ? Math.min(out - 150 * 60, dels.length ? dels[0][0] - 120 : Infinity) : null);
+});
+const standAt = (f, T) => { let cur = f._stands[0][1]; for (const [t, st] of f._stands) if (t <= T) cur = st; return cur; };
+
 // ---------- scene state: the same rules as the other views ----------
 let layoutKey = null;
 function sceneState(T) {
@@ -695,11 +716,11 @@ function sceneState(T) {
   if (key !== layoutKey) { layoutKey = key; layoutStands(relevantStands(dayStart(T))); groundDirty = true; }
   const planeAt = new Map();
   D.flights.forEach(f => {
-    const l = byId[f.stand]; if (!l || l.x == null || l.hall) return;
     const out = f.etd || f.std; if (!out) return;
-    const inn = f.sta || out - 150 * 60;
+    const inn = f._inn, l = byId[standAt(f, T)]; if (!l || l.x == null || l.hall) return;
     if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
-    if (T >= inn && T <= out + 5 * 60) planeAt.set(l.id, f);
+    const had = planeAt.get(l.id);   // two flights booked on one stand: the aircraft already there keeps it until it leaves
+    if (T >= inn && T <= out + 5 * 60 && (!had || had._inn > inn)) planeAt.set(l.id, f);
   });
   const piles = new Map();
   const add = (l, t, a = 1) => { if (!piles.has(l.id)) piles.set(l.id, []); piles.get(l.id).push([t, a]); };
@@ -887,12 +908,12 @@ function taxiPaths(l, dirIn, dirOut) {
 // a flight's movements: approach, roll-out, taxi in, on stand, pushback, taxi out, take-off
 const TAXI = 9, VTD = 70, VEXIT = 12;
 function flightPlan(f) {
-  const l = byId[f.stand]; if (!l || !l.nose) return null;
   const out = f.etd || f.std; if (!out) return null;
-  const inn = f.sta || out - 150 * 60;
+  const inn = f._inn, lIn = byId[standAt(f, inn)], l = byId[standAt(f, out)];
+  if (!l || !l.nose || !lIn || !lIn.nose) return null;
   if (f._plan && f._plan.inn === inn && f._plan.out === out) return f._plan;
   const dirIn = rwyDir(inn - 600), dirOut = rwyDir(out + 300);
-  const p = taxiPaths(l, dirIn, dirOut);
+  const p = { ...taxiPaths(l, dirIn, dirOut), inC: taxiPaths(lIn, dirIn, dirOut).inC };
   const tExit = inn - p.inC.len / TAXI, rollD = Math.abs(p.ri.td - p.ri.exit), rollT = 2 * rollD / (VTD + VEXIT);
   const tTouch = tExit - rollT, tApp = tTouch - 28;
   const tPushEnd = out + 75, tTaxi = tPushEnd + 15, tHold = tTaxi + p.outC.len / TAXI, tRoll = tHold + 15;
@@ -911,7 +932,10 @@ function planePose(pl, T) {
     return { x: ri.td + pl.dirIn * s, y: RWY.y, z: 0, yaw: pl.dirIn > 0 ? 0 : Math.PI, gear: 1, phase: 'Landing' };
   }
   if (T < pl.inn) { const p = along(inC, (T - pl.tExit) * TAXI); return { ...p, z: 0, gear: 1, phase: 'Taxi in' }; }
-  if (T < pl.out) return { x: S[0], y: S[1], z: 0, yaw: hyaw, gear: 1, phase: 'On stand' };
+  if (T < pl.out) {     // on stand; if the flight was moved, the aircraft is at the stand it had at this moment
+    const ls = byId[standAt(pl.f, T)], q = ls && ls.nose && ls !== l ? standFrame(ls)(0, 2) : S;
+    return { x: q[0], y: q[1], z: 0, yaw: ls && ls.nose ? Math.atan2(-ls.h[1], ls.h[0]) : hyaw, gear: 1, phase: 'On stand', l: ls && ls.nose ? ls : l };
+  }
   if (T < pl.tTaxi) {    // pushback straight out of the stand, then turned onto the taxilane
     const t = clamp((T - pl.out) / 60, 0, 1), s = ease(t) * (pl.pushLen + Math.hypot(pl.L[0] - pl.entry[0], pl.L[1] - pl.entry[1]));
     const x = S[0] - l.h[0] * s, y = S[1] - l.h[1] * s;
@@ -1401,7 +1425,7 @@ function select(kind, id, glide) {
 function posOf(s) {
   if (!s) return null;
   if (s.kind === 'tug') { const d = drvById[s.id]; return d?._p ? { x: d._p.x, y: d._p.y, z: 4, r: 6 } : null; }
-  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[f.stand]; if (l?.nose && lastRes?.planeAt.get(l.id)?.id === f.id) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
+  if (s.kind === 'flight') { const p = planeObjs.get(s.id); if (p && p.g.visible) return { x: p.g.position.x, y: p.g.position.z, z: p.g.position.y + 12, r: 16 }; const f = flights[s.id], l = f && byId[standAt(f, T)]; if (l?.nose && lastRes?.planeAt.get(l.id)?.id === f.id) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 24 }; } return null; }
   const l = byId[s.id]; if (!l) return null;
   if (s.kind === 'stand' && l.nose) { const [x, y] = standFrame(l)(0, 22); return { x, y, z: 12, r: 26 }; }
   if (l.yard) return { x: (l.yard.x0 + l.yard.x1) / 2, y: (l.yard.y0 + l.yard.y1) / 2, z: 6, r: 40 };
@@ -1476,11 +1500,11 @@ function updateWorld(T, res, dt) {
   D.flights.forEach(f => {
     if (org !== 'all' && !flightOrgs.get(f.id)?.has(org)) return;
     const out = f.etd || f.std; if (!out) return;
-    const inn = f.sta || out - 150 * 60;
+    const inn = f._inn;
     if (T < inn - 1800 || T > out + 1800) return;
     const pl = flightPlan(f); if (!pl) return;
     const ps = planePose(pl, T); if (!ps) return;
-    if (ps.phase === 'On stand' && res.planeAt.get(pl.l.id) && res.planeAt.get(pl.l.id).id !== f.id) return;   // one plane per stand, as in the data views
+    if (ps.phase === 'On stand' && res.planeAt.get(ps.l.id) && res.planeAt.get(ps.l.id).id !== f.id) return;   // one plane per stand, as in the data views
     live.add(f.id);
     let P = planeObjs.get(f.id);
     if (!P) { const g = makePlane(f.no); g.userData.pick = { kind: 'flight', id: f.id }; scene.add(g); P = { g, f }; planeObjs.set(f.id, P); }
@@ -1529,6 +1553,12 @@ function updateWorld(T, res, dt) {
     const k = l.yard ? 1 : vp, [ax, ay] = slot(l, 0);
     list.slice(0, cap).forEach(([t], i) => { const [x, y, z] = slot(l, i); putULD(t, ax + (x - ax) * k, ay + (y - ay) * k, z * k, yaw, k); });
     if (list.length > cap) { const [x, y] = slot(l, cap - 1); label('more' + id, x, y, 6, `+${list.length - cap}`, 'soft', 6); }
+    // ULDs dropped at a stand other than where their aircraft is: say which flight they are for
+    if (l.nose) {
+      const away = [...new Set(list.map(([t]) => t.full && t.flight).filter(Boolean))].map(fid => flights[fid])
+        .filter(f => f && res.planeAt.get(id)?.id !== f.id && (standAt(f, T) !== id || T < f._inn));
+      if (away.length) { const [x, y] = slot(l, 0); label('away' + id, x, y, 9 * k, away.map(f => `For ${esc(f.no)} <em>${standAt(f, T) !== id ? 'aircraft on ' + esc(byId[standAt(f, T)]?.name ?? '—') : 'aircraft due ' + fmtT(f._inn)}</em>`).join('<br>'), 'soft', 3); }
+    }
   });
   // tugs with their dolly trains
   const seen = new Set();
@@ -1658,7 +1688,7 @@ function renderPanels(T, res, force) {
   $('dnBtn').innerHTML = { auto: `${WXI.auto}<span>Auto</span>`, day: `${WXI.sun}<span>Day</span>`, night: `${WXI.moon}<span>Night</span>` }[dnMode];
   if (!$('wxPop').hidden) renderWx(T); if (!$('alPop').hidden) renderAlerts(T, al);
   // a selected flight lets go when the replay moves well away from it (another day, or long gone)
-  if (sel?.kind === 'flight') { const f = flights[sel.id], out = f && (f.etd || f.std), inn = f && (f.sta || out - 150 * 60); if (!f || T < inn - 3 * 3600 || T > out + 3600) { sel = null; follow = null; } }
+  if (sel?.kind === 'flight') { const f = flights[sel.id], out = f && (f.etd || f.std), inn = f && f._inn; if (!f || T < inn - 3 * 3600 || T > out + 3600) { sel = null; follow = null; } }
   // default selection: the first tug doing something
   if (!sel || (sel.kind === 'tug' && !inOrg(drvById[sel.id]?.company))) {
     const s = res.states.find(s => !['off', 'idle'].includes(s.st.k)) || res.states.find(s => s.st.k !== 'off');
@@ -1673,7 +1703,7 @@ const head = (icon, eye, name, sub, extra = '') => `<div class="dh"><span class=
 function flightInfo(f, T) {
   const ts = D.tasks.filter(t => t.flight === f.id && inOrg(t.company));
   const del = ts.filter(t => t.del && t.del <= T), late = del.filter(isLate);
-  const P = planeObjs.get(f.id), out = f.etd || f.std, inn = f.sta || out - 150 * 60;
+  const P = planeObjs.get(f.id), out = f.etd || f.std, inn = f._inn;
   const phase = P?.ps?.phase || (T < inn ? 'Inbound' : T > out ? 'Departed' : 'On stand');
   const tugs = [...new Set(ts.map(t => t.o.driver).filter(Boolean))].map(id => drvById[id]?.tag).filter(Boolean);
   return { ts, del, late, phase, tugs, out, inn, full: del.filter(t => t.full).length, empty: del.filter(t => !t.full).length, urgent: ts.filter(t => isUrgent(t, T) && !(t.del && t.del <= T)).length };
@@ -1703,7 +1733,7 @@ function renderDetail(T, res) {
         <span>Flight</span><strong>${f ? `<a href="#" data-fl="${f.id}" style="color:var(--accent-ink)">${esc(f.no)}</a>${left != null ? ` · ${left >= 0 ? 'STD in ' + left + ' min' : 'departed'}` : ''}` : '—'}</strong>
         <span>Trips today</span><strong class="m">${done.length}</strong></div>`;
   } else if (sel.kind === 'flight') {
-    const f = flights[sel.id], l = byId[f.stand], I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
+    const f = flights[sel.id], l = byId[standAt(f, T)], I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
     const ph = { 'On stand': ['var(--ok-soft)', 'var(--ok)'], 'Pushback': ['var(--info-soft)', 'var(--info)'] }[I.phase] || ['var(--chip)', 'var(--muted)'];
     el.innerHTML = head(`<span style="color:${TAILC[String(f.no).slice(0, 2)] || 'var(--accent)'}">${ICON.plane}</span>`, airlineOf(f.no), esc(f.no), `${fmtD(f.etd || f.std)} · stand ${esc(l?.name ?? '—')} · ${esc(f.status || 'Scheduled')}`) + `
       <div class="state">${pill(I.phase, ph[0], ph[1])}${I.urgent ? pill(`${I.urgent} urgent`, 'var(--alert)', '#fff') : ''}<span>${left >= 0 ? `Departs in ${left} min` : `Departed ${-left} min ago`}</span></div>
@@ -1759,7 +1789,7 @@ function renderTracker(T, res) {
   if (f) {
     const I = flightInfo(f, T), dels = I.ts.filter(t => t.del).map(t => t.del).sort((a, b) => a - b);
     $('trkTitle').textContent = `Turnaround · ${f.no}`;
-    $('trkHead').textContent = `${fmtD(I.out)} · stand ${byId[f.stand]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
+    $('trkHead').textContent = `${fmtD(I.out)} · stand ${byId[standAt(f, T)]?.name ?? '—'} · ${[...(flightOrgs.get(f.id) || [])].join(', ')}`;
     $('steps').innerHTML = steps([['On stand', I.inn, STEPI.stand], ['First ULD', dels[0], STEPI.box], ['Last ULD', dels[dels.length - 1], STEPI.ok], ['Pushback', I.out, STEPI.go]], T, false);
     const pending = I.ts.filter(t => !(t.del && t.del <= T) && !(t.can && t.can <= T)).length;
     $('tsum').innerHTML = `<span><b>${I.del.length}</b> of ${I.ts.length} ULDs delivered</span><span><b>${pending}</b> still to come</span><span style="color:${I.late.length ? 'var(--alert)' : 'inherit'}"><b>${I.late.length}</b> late</span><span>${I.phase}</span>`;
@@ -1803,7 +1833,7 @@ function renderTable(T, res) {
     html = flightsToday.map(f => {
       const I = flightInfo(f, T), left = Math.round((I.out - T) / 60);
       const st = I.phase === 'On stand' ? (left < 20 ? pill('Closing', 'var(--alert-soft)', 'var(--alert)') : pill('On stand', 'var(--ok-soft)', 'var(--ok)')) : I.phase === 'Inbound' ? pill('Inbound', 'var(--chip)', 'var(--muted)') : pill(I.phase, 'var(--info-soft)', 'var(--info)');
-      return `<button type="button" class="row ${sel?.id === f.id ? 'sel' : ''}" data-k="flight" data-id="${f.id}"><span class="id">${esc(f.no)}<small>stand ${esc(byId[f.stand]?.name ?? '—')}</small></span><span class="w">${I.del.length} ULD delivered${I.late.length ? ` · ${I.late.length} late` : ''} · STD ${fmtT(I.out)}</span>${st}<span class="n">${left >= 0 ? left + 'm' : 'gone'}</span></button>`;
+      return `<button type="button" class="row ${sel?.id === f.id ? 'sel' : ''}" data-k="flight" data-id="${f.id}"><span class="id">${esc(f.no)}<small>stand ${esc(byId[standAt(f, T)]?.name ?? '—')}</small></span><span class="w">${I.del.length} ULD delivered${I.late.length ? ` · ${I.late.length} late` : ''} · STD ${fmtT(I.out)}</span>${st}<span class="n">${left >= 0 ? left + 'm' : 'gone'}</span></button>`;
     }).join('') || '<div class="empty">No more departures today.</div>';
   }
   $('rows').innerHTML = html;
@@ -1854,7 +1884,7 @@ function showHits() {
 }
 function pickHit(i) {
   const h = hits[i]; if (!h) return;
-  if (h[0] === 'flight') { const f = flights[h[1]], out = f.etd || f.std; if (Math.abs(out - T) > 3 * 3600) T = (f.sta || out - 150 * 60) + 20 * 60; }
+  if (h[0] === 'flight') { const f = flights[h[1]], out = f.etd || f.std; if (Math.abs(out - T) > 3 * 3600) T = f._inn + 20 * 60; }
   select(h[0], h[1], true); $('results').hidden = true; $('q').blur();
 }
 $('q').addEventListener('input', e => { hits = searchAll(e.target.value); hitI = 0; showHits(); });
@@ -2001,6 +2031,20 @@ window.apronDebug = {
     };
   },
   range: () => ({ tMin, tMax }),
+  // every full ULD delivered to a stand: is its aircraft there, or does the pile say where the aircraft is?
+  planeCheck() {
+    const c = { present: 0, labelled: 0, due: 0, missing: [], moved: [] }, o = org; org = 'all';
+    D.tasks.forEach(t => {
+      if (!t.flight || !t.del || byId[t.to]?.type !== 'FlightStand' || t.o.vd == null) return;
+      const at = Math.max(t.o.vd, t.del) + 30, f = flights[t.flight], pf = sceneState(at).planeAt.get(t.to);
+      if (pf && pf.id === f.id) c.present++;
+      else if (standAt(f, at) !== t.to) c.labelled++;
+      else if (at < f._inn) c.due++;
+      else c.missing.push([f.no, byId[t.to].name, at, pf ? pf.no : null]);
+    });
+    D.flights.forEach(f => { if (f._stands.length > 1) c.moved.push([f.no, f.etd || f.std, f._stands.map(([t, s]) => [isFinite(t) ? t : null, byId[s]?.name])]); });
+    org = o; return c;
+  },
   // aircraft routes for checking: [stand name, route in, route out] for both runway directions
   taxiRoutes: () => allStands.filter(l => l.nose).flatMap(l => [-1, 1].map(d => { const p = taxiPaths(l, d, d); return [l.name, d, p.inC.pts, p.outC.pts]; })),
 };
